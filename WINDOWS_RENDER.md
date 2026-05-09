@@ -63,11 +63,14 @@ Output: `data\processed\all_galaxies.parquet` (~150 MB, 1.4M galaxies)
 
 ## 4. Verify Blender Can See Your GPU
 
-Open a Command Prompt, find your Blender path, and run a quick GPU detection check:
+Open a Command Prompt, **`cd` to the repo root first**, then run a quick GPU detection check:
 
 ```bat
+cd C:\DesiMapper
 "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python animation\render.py -- --parquet data\processed\all_galaxies.parquet --output renders\test\ --resolution 1920x1080 --samples 32 --max-points 100000 --start-frame 1 --end-frame 1
 ```
+
+> All commands in this guide assume your working directory is the repo root (`C:\DesiMapper` or wherever you cloned it). Blender requires the `--python` path to be reachable from the current directory when given as a relative path.
 
 In the output you should see:
 ```
@@ -187,21 +190,36 @@ Then retry `$BLENDER --background --version`.
 
 ### Run the render from WSL2
 
-Clone the repo (or access it via the Windows filesystem at `/mnt/c/...`), then:
+Clone the repo inside WSL2 (recommended — avoids the slow `/mnt/c` filesystem bridge):
 
 ```bash
-# If repo is on the Windows side
-cd /mnt/c/DesiMapper
+cd ~
+git clone https://github.com/TheFirstIstari/DesiMapper.git
+cd DesiMapper
+```
 
-# Activate the Python venv you set up (or create a new one in WSL2)
+Or if you already cloned it on the Windows side, find it under `/mnt/c/Users/<your-windows-username>/`:
+
+```bash
+# Example — replace <username> with your actual Windows username
+cd "/mnt/c/Users/<username>/DesiMapper"
+```
+
+Then set up and run:
+
+```bash
+# Set up Python environment
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r pipeline/requirements.txt
 
-# Quick test render (adjust paths as needed)
-$BLENDER --background --python animation/render.py -- \
-    --parquet data/processed/all_galaxies.parquet \
-    --output /mnt/c/DesiMapper/renders/test/ \
+# Store the repo root as an absolute path — Blender needs this
+REPO=$(pwd)
+
+# Quick test render
+$BLENDER --background --python "$REPO/animation/render.py" -- \
+    --parquet "$REPO/data/processed/all_galaxies.parquet" \
+    --output "$REPO/renders/test/" \
     --resolution 1920x1080 \
     --samples 32 \
     --max-points 100000 \
@@ -210,7 +228,7 @@ $BLENDER --background --python animation/render.py -- \
 
 In the output you should see `Backend: OPTIX` or `Backend: CUDA` — your RTX 3090 is being used.
 
-> **Note:** Output paths written by Blender running in WSL2 can be on the Windows filesystem (`/mnt/c/...`) or on the WSL2 filesystem (`~/...`). Writing to `/mnt/c/` is slightly slower due to the 9P filesystem bridge; writing to the WSL2 native filesystem (`/home/...`) and then copying is faster for large frame counts.
+> **Important:** Always use absolute paths (via `$REPO`) for `--python` and `--parquet`. Blender changes its working directory internally when it starts, so relative paths like `animation/render.py` will fail with "no such file or directory".
 
 ---
 
