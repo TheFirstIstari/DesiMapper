@@ -26,6 +26,28 @@ TRACER_COLORS = {
 TRACER_NAMES = {0: "BGS", 1: "LRG", 2: "ELG", 3: "QSO"}
 
 
+def get_or_create_template_collection() -> bpy.types.Collection:
+    """Return (creating if needed) a collection that is excluded from render.
+
+    Template icospheres are placed here so Blender 5.x never renders them
+    even if hide_render alone isn't honoured by the ObjectInfo geo-node.
+    """
+    name = "Templates_NoRender"
+    col = bpy.data.collections.get(name)
+    if col is None:
+        col = bpy.data.collections.new(name)
+        bpy.context.scene.collection.children.link(col)
+    # Exclude from the view layer so nothing in it renders.
+    # Also set holdout + indirect_only as belt-and-suspenders.
+    layer_col = bpy.context.view_layer.layer_collection.children.get(name)
+    if layer_col is not None:
+        layer_col.exclude      = True
+        layer_col.holdout      = True
+        layer_col.indirect_only = True
+    bpy.context.view_layer.update()
+    return col
+
+
 def clear_scene():
     """Remove all default objects from the scene."""
     for obj in list(bpy.data.objects):
@@ -102,6 +124,18 @@ def create_galaxy_mesh(
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(obj)
 
+    # Assign a fully transparent material so the host mesh vertices don't render
+    # as grey geometry alongside the geo-nodes icosphere instances.
+    invis = bpy.data.materials.new(f"{name}_Invisible")
+    invis.use_nodes = True
+    invis.blend_method = "CLIP"
+    nt = invis.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    trans = nt.nodes.new("ShaderNodeBsdfTransparent")
+    nt.links.new(trans.outputs["BSDF"], out.inputs["Surface"])
+    mesh.materials.append(invis)
+
     # Store tracer type as INT attribute on vertices
     tracer_attr = mesh.attributes.new(name="tracer_id", type="INT", domain="POINT")
     tracer_attr.data.foreach_set("value", tracer_ids.astype(np.int32))
@@ -128,17 +162,26 @@ def create_tracer_material(tracer_id: int) -> bpy.types.Material:
 def create_instance_template(tracer_id: int, radius: float) -> bpy.types.Object:
     """
     Tiny icosphere used as instance template for one tracer type.
-    Hidden from viewport and render — only used via InstanceOnPoints.
+    Placed in the Templates_NoRender collection (excluded from render) so
+    Blender 5.x never renders it, even via ObjectInfo in geo-nodes.
     """
     name = TRACER_NAMES[tracer_id]
-    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=radius)
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=radius)
     ico = bpy.context.active_object
     ico.name = f"Template_{name}"
     mat = create_tracer_material(tracer_id)
     ico.data.materials.append(mat)
-    ico.hide_render   = True
-    ico.hide_viewport = True
-    return ico
+    # Extract radius and material before deleting the scene object.
+    # The geo-nodes tree uses GeometryNodeMeshIcoSphere inline, so the
+    # physical icosphere object is only needed for these two values.
+    # We delete it immediately because Blender 5.1 ignores hide_render,
+    # visible_camera, and collection exclusion in background renders.
+    radius   = ico.data.vertices[0].co.length
+    material = ico.data.materials[0]
+    ico_mesh = ico.data
+    bpy.data.objects.remove(ico, do_unlink=True)
+    bpy.data.meshes.remove(ico_mesh)
+    return {"radius": radius, "material": material}
 
 
 def add_instance_on_points_geonodes(
@@ -199,17 +242,24 @@ def add_instance_on_points_geonodes(
         links.new(gi.outputs[0],          m2p.inputs["Mesh"])
         links.new(compare.outputs["Result"], m2p.inputs["Selection"])
 
-        # ObjectInfo for template
-        obj_n = nodes.new("GeometryNodeObjectInfo")
-        obj_n.inputs["Object"].default_value = ico_obj
-        obj_n.transform_space = "RELATIVE"
-        obj_n.location = (-100, y - 120)
+        # IcoSphere node — self-contained geometry, no scene object reference needed.
+        # Avoids the Blender 5.x bug where ObjectInfo leaks the template mesh.
+        ico_node = nodes.new("GeometryNodeMeshIcoSphere")
+        ico_node.inputs["Radius"].default_value = ico_obj["radius"]
+        ico_node.inputs["Subdivisions"].default_value = 1
+        ico_node.location = (-100, y - 120)
+
+        # Set material on the realized geometry via a SetMaterial node
+        set_mat = nodes.new("GeometryNodeSetMaterial")
+        set_mat.inputs["Material"].default_value = ico_obj["material"]
+        set_mat.location = (100, y - 120)
+        links.new(ico_node.outputs["Mesh"], set_mat.inputs["Geometry"])
 
         # InstanceOnPoints
         iop = nodes.new("GeometryNodeInstanceOnPoints")
         iop.location = (300, y)
-        links.new(m2p.outputs["Points"],     iop.inputs["Points"])
-        links.new(obj_n.outputs["Geometry"], iop.inputs["Instance"])
+        links.new(m2p.outputs["Points"],      iop.inputs["Points"])
+        links.new(set_mat.outputs["Geometry"], iop.inputs["Instance"])
 
         # RealizeInstances (required so Cycles sees real geometry)
         ri = nodes.new("GeometryNodeRealizeInstances")
@@ -230,6 +280,17 @@ def add_background_stars(n: int = 3000, spread: float = 8.0, ico_radius: float =
     obj = bpy.data.objects.new("Stars", mesh)
     bpy.context.scene.collection.objects.link(obj)
 
+    # Invisible material for the host mesh vertices (same fix as galaxy host mesh)
+    invis = bpy.data.materials.new("Stars_Invisible")
+    invis.use_nodes = True
+    invis.blend_method = "CLIP"
+    nt = invis.node_tree
+    nt.nodes.clear()
+    out_i = nt.nodes.new("ShaderNodeOutputMaterial")
+    trans = nt.nodes.new("ShaderNodeBsdfTransparent")
+    nt.links.new(trans.outputs["BSDF"], out_i.inputs["Surface"])
+    mesh.materials.append(invis)
+
     # Star material
     mat = bpy.data.materials.new("StarMat")
     mat.use_nodes = True
@@ -240,34 +301,33 @@ def add_background_stars(n: int = 3000, spread: float = 8.0, ico_radius: float =
     em.inputs["Strength"].default_value = 0.8
     mat.node_tree.links.new(em.outputs["Emission"], out.inputs["Surface"])
 
-    # Star template icosphere
-    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=ico_radius)
-    star_ico = bpy.context.active_object
-    star_ico.name = "Template_Star"
-    star_ico.data.materials.append(mat)
-    star_ico.hide_render   = True
-    star_ico.hide_viewport = True
+    # No template object needed — geo-nodes uses GeometryNodeMeshIcoSphere inline.
 
-    # GeoNodes: MeshToPoints → InstanceOnPoints → RealizeInstances
+    # GeoNodes: MeshToPoints → IcoSphere (inline) → InstanceOnPoints → RealizeInstances
+    # Using GeometryNodeMeshIcoSphere instead of ObjectInfo avoids the Blender 5.x
+    # bug where the referenced object's mesh leaks into the render.
     mod = obj.modifiers.new("StarGeo", "NODES")
     ng  = bpy.data.node_groups.new("StarPoints", "GeometryNodeTree")
     mod.node_group = ng
     ng.interface.new_socket("Geometry", in_out="INPUT",  socket_type="NodeSocketGeometry")
     ng.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
-    gi  = ng.nodes.new("NodeGroupInput")
-    go  = ng.nodes.new("NodeGroupOutput")
-    m2p = ng.nodes.new("GeometryNodeMeshToPoints")
+    gi   = ng.nodes.new("NodeGroupInput")
+    go   = ng.nodes.new("NodeGroupOutput")
+    m2p  = ng.nodes.new("GeometryNodeMeshToPoints")
     m2p.mode = "VERTICES"
-    obj_n = ng.nodes.new("GeometryNodeObjectInfo")
-    obj_n.inputs["Object"].default_value = star_ico
-    obj_n.transform_space = "RELATIVE"
-    iop = ng.nodes.new("GeometryNodeInstanceOnPoints")
-    ri  = ng.nodes.new("GeometryNodeRealizeInstances")
-    ng.links.new(gi.outputs[0],             m2p.inputs["Mesh"])
-    ng.links.new(obj_n.outputs["Geometry"], iop.inputs["Instance"])
-    ng.links.new(m2p.outputs["Points"],     iop.inputs["Points"])
-    ng.links.new(iop.outputs["Instances"],  ri.inputs["Geometry"])
-    ng.links.new(ri.outputs["Geometry"],    go.inputs[0])
+    ico_n = ng.nodes.new("GeometryNodeMeshIcoSphere")
+    ico_n.inputs["Radius"].default_value = ico_radius
+    ico_n.inputs["Subdivisions"].default_value = 1
+    sm   = ng.nodes.new("GeometryNodeSetMaterial")
+    sm.inputs["Material"].default_value = mat
+    iop  = ng.nodes.new("GeometryNodeInstanceOnPoints")
+    ri   = ng.nodes.new("GeometryNodeRealizeInstances")
+    ng.links.new(gi.outputs[0],         m2p.inputs["Mesh"])
+    ng.links.new(ico_n.outputs["Mesh"], sm.inputs["Geometry"])
+    ng.links.new(sm.outputs["Geometry"], iop.inputs["Instance"])
+    ng.links.new(m2p.outputs["Points"], iop.inputs["Points"])
+    ng.links.new(iop.outputs["Instances"], ri.inputs["Geometry"])
+    ng.links.new(ri.outputs["Geometry"], go.inputs[0])
 
 
 def build_scene(
