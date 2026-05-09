@@ -151,10 +151,14 @@ def main():
     args = parse_args()
 
     import bpy
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+    # Insert both project root and animation dir so imports work
+    script_dir   = Path(__file__).resolve().parent
+    project_root = script_dir.parent
+    sys.path.insert(0, str(project_root))
+    sys.path.insert(0, str(script_dir))
 
-    from animation.scene import build_scene
-    from animation.camera_path import create_camera, apply_keyframes, TOTAL_SECONDS
+    from scene import build_scene
+    from camera_path import create_camera, apply_keyframes, TOTAL_SECONDS
 
     parquet_path = Path(args.parquet)
     output_dir = Path(args.output)
@@ -173,7 +177,7 @@ def main():
     print(f"  Output     : {output_dir}/")
     print("=" * 60)
 
-    build_scene(parquet_path, max_points=args.max_points)
+    build_scene(parquet_path, max_points=args.max_points, galaxy_radius=0.005)
 
     cam = create_camera()
     # Update camera path for 60fps (more keyframes for smoothness)
@@ -190,17 +194,18 @@ def main():
     scene.render.resolution_y = int(h)
     scene.render.resolution_percentage = 100
 
-    # Output format — EXR for 8K to preserve HDR range before colour grade
-    # Switch to PNG if disk space is a concern
-    scene.render.image_settings.file_format = "OPEN_EXR"
+    # Output format — PNG 16-bit for 8K (~15 MB/frame vs 50 MB for EXR)
+    # Good balance of quality and disk usage; no HDR needed for point-cloud scene
+    scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGB"
     scene.render.image_settings.color_depth = "16"
-    scene.render.image_settings.exr_codec = "ZIPS"  # Fast lossless EXR
+    scene.render.image_settings.compression = 20  # 0=fast/large, 100=slow/small; 20 is good balance
 
-    # Colour management — filmic for natural star/galaxy look
+    # Colour management — Filmic with gentle contrast for space visualization
+    # "High Contrast" clips emission colors; use medium contrast instead
     scene.view_settings.view_transform = "Filmic"
-    scene.view_settings.look = "High Contrast"
-    scene.view_settings.exposure = 0.5
+    scene.view_settings.look = "Medium Contrast"
+    scene.view_settings.exposure = -0.5   # bring down to preserve tracer color hues
     scene.view_settings.gamma = 1.0
 
     # GPU setup
@@ -217,10 +222,10 @@ def main():
     scene.render.filepath = str(output_dir / "frame_####")
 
     total_frames = (scene.frame_end - scene.frame_start) + 1
-    storage_gb = total_frames * 50 / 1024  # ~50 MB per 8K EXR
+    storage_gb = total_frames * 15 / 1024  # ~15 MB per 8K PNG
     print(f"\nRendering {total_frames} frames")
     print(f"Estimated storage: ~{storage_gb:.0f} GB")
-    print(f"Output: {output_dir}/frame_####.exr\n")
+    print(f"Output: {output_dir}/frame_####.png\n")
 
     # ─── Render ─────────────────────────────────────────────────────────────
     bpy.ops.render.render(animation=True)
