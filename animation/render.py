@@ -51,8 +51,8 @@ def parse_args():
         help="Output directory for PNG frames",
     )
     parser.add_argument(
-        "--samples", type=int, default=256,
-        help="Cycles render samples per frame (default: 256 — adaptive sampling disabled)",
+        "--samples", type=int, default=128,
+        help="Cycles render samples per frame (default: 128 — adaptive sampling disabled)",
     )
     parser.add_argument(
         "--resolution", default="7680x4320",
