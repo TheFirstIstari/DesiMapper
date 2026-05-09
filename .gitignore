@@ -1,7 +1,17 @@
 # Data — never commit raw/processed astronomical data
-data/raw/
-data/processed/
-renders/
+data/raw/*
+data/processed/*
+renders/*
+
+# Keep directory skeletons so scripts can write to them after a fresh clone
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!renders/frames/
+renders/frames/*
+!renders/frames/.gitkeep
+!renders/segments/
+renders/segments/*
+!renders/segments/.gitkeep
 
 # Web build artifacts
 web/dist/

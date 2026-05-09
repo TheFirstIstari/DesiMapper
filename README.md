@@ -28,7 +28,7 @@ DESI is a spectroscopic survey instrument on the Nicholas U. Mayall 4-meter Tele
 
 - [mise](https://mise.jdx.dev/) — manages Python 3.12 and Node 20 environments
 - Python packages: `astropy`, `numpy`, `pyarrow`, `httpx`, `tqdm`, `polars`, `rich`
-- [Blender 4.x](https://www.blender.org/) — for the animation render (optional)
+- [Blender 5.1](https://www.blender.org/) — for the animation render (optional)
 - `ffmpeg` — for video encoding (optional)
 
 ```bash
@@ -92,8 +92,9 @@ bash scripts/encode_video.sh
 
 **Windows (NVIDIA GPU — OptiX/NVENC):**
 ```bat
-REM Quick test at 1080p
-"C:\Program Files\Blender Foundation\Blender 4.3\blender.exe" --background --python animation\render.py -- ^
+REM Quick test at 1080p (run from repo root: cd C:\DesiMapper)
+"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python animation\render.py -- ^
+  --parquet data\processed\all_galaxies.parquet ^
   --resolution 1920x1080 --samples 32 --max-points 200000
 
 REM Full 8K production render (batched, manages disk space automatically)

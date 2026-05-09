@@ -143,11 +143,14 @@ for %%f in ("%FRAMES_DIR%\frame_*.png") do set /a "N_RENDERED+=1"
 echo   Rendered %N_RENDERED% frames
 
 REM ── Encode chunk to MP4 via NVENC (GPU H.265) ──────────────────────────────
+REM Note: Windows cmd does not expand globs — use %%04d sequential pattern.
+REM Blender names frames frame_0001.png … frame_NNNN.png.
+REM -start_number tells ffmpeg which frame number the chunk begins at.
 echo   Encoding segment: !SEGMENT!
 ffmpeg -y ^
     -framerate %FPS% ^
-    -pattern_type glob ^
-    -i "%FRAMES_DIR%/frame_*.png" ^
+    -start_number %START% ^
+    -i "%FRAMES_DIR%\frame_%%04d.png" ^
     -c:v hevc_nvenc ^
     -preset p6 ^
     -cq 20 ^
@@ -161,8 +164,8 @@ if errorlevel 1 (
     echo WARNING: NVENC H.265 failed. Falling back to software libx265...
     ffmpeg -y ^
         -framerate %FPS% ^
-        -pattern_type glob ^
-        -i "%FRAMES_DIR%/frame_*.png" ^
+        -start_number %START% ^
+        -i "%FRAMES_DIR%\frame_%%04d.png" ^
         -c:v libx265 ^
         -crf 18 ^
         -preset slow ^

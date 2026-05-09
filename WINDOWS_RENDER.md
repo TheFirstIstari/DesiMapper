@@ -8,7 +8,7 @@ Step-by-step setup for rendering the 8K 60fps animation on a Windows PC with an 
 
 | Software | Download |
 |----------|----------|
-| **Blender 4.3+ or 5.x** | https://www.blender.org/download/ |
+| **Blender 5.1** | https://www.blender.org/download/ |
 | **Python 3.12** | https://www.python.org/downloads/ |
 | **Git** | https://git-scm.com/download/win |
 | **ffmpeg** | `winget install ffmpeg` or https://ffmpeg.org/download.html |
@@ -19,6 +19,20 @@ Verify your driver version:
 nvidia-smi
 ```
 You should see `CUDA Version: 12.x` in the top-right corner. If not, update your drivers.
+
+### Install pyarrow into Blender's bundled Python
+
+Blender ships its own isolated Python 3.13. `scene.py` reads the galaxy Parquet file using `pyarrow`, which must be installed into **Blender's** Python — not the system Python or your venv. Do this once after installing Blender:
+
+```bat
+REM Adjust the path if your Blender version differs
+"C:\Program Files\Blender Foundation\Blender 5.1\5.1\python\bin\python.exe" -m pip install pyarrow
+```
+
+Verify:
+```bat
+"C:\Program Files\Blender Foundation\Blender 5.1\5.1\python\bin\python.exe" -c "import pyarrow; print(pyarrow.__version__)"
+```
 
 ---
 
@@ -187,6 +201,23 @@ sudo apt-get install -y libsm6 libice6 libxext6 libxrender1 libgl1
 ```
 
 Then retry `$BLENDER --background --version`.
+
+### Install pyarrow into Blender's bundled Python
+
+Blender ships its own Python interpreter (3.13) that is isolated from the system Python. `scene.py` loads the galaxy Parquet file using `pyarrow`, so it must be installed into **Blender's** Python — not your venv.
+
+```bash
+# Find Blender's Python (adjust version dir if different)
+BLENDER_PY=~/blender-5.1.1-linux-x64/5.1/python/bin/python3.13
+
+# Install pyarrow into it
+$BLENDER_PY -m pip install pyarrow
+
+# Verify
+$BLENDER_PY -c "import pyarrow; print(pyarrow.__version__)"
+```
+
+You only need to do this once — it persists in the Blender installation directory.
 
 ### Run the render from WSL2
 
