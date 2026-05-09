@@ -8,7 +8,7 @@ Step-by-step setup for rendering the 8K 60fps animation on a Windows PC with an 
 
 | Software | Download |
 |----------|----------|
-| **Blender 4.3+** | https://www.blender.org/download/ |
+| **Blender 4.3+ or 5.x** | https://www.blender.org/download/ |
 | **Python 3.12** | https://www.python.org/downloads/ |
 | **Git** | https://git-scm.com/download/win |
 | **ffmpeg** | `winget install ffmpeg` or https://ffmpeg.org/download.html |
@@ -66,7 +66,7 @@ Output: `data\processed\all_galaxies.parquet` (~150 MB, 1.4M galaxies)
 Open a Command Prompt, find your Blender path, and run a quick GPU detection check:
 
 ```bat
-"C:\Program Files\Blender Foundation\Blender 4.3\blender.exe" --background --python animation\render.py -- --parquet data\processed\all_galaxies.parquet --output renders\test\ --resolution 1920x1080 --samples 32 --max-points 100000 --start-frame 1 --end-frame 1
+"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python animation\render.py -- --parquet data\processed\all_galaxies.parquet --output renders\test\ --resolution 1920x1080 --samples 32 --max-points 100000 --start-frame 1 --end-frame 1
 ```
 
 In the output you should see:
@@ -106,7 +106,7 @@ Final output: `renders\desimapper_8k_60fps.mp4`
 Render all frames at once (requires ~340 GB free disk space for 8K PNGs):
 
 ```bat
-"C:\Program Files\Blender Foundation\Blender 4.3\blender.exe" --background --python animation\render.py -- ^
+"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python animation\render.py -- ^
     --parquet data\processed\all_galaxies.parquet ^
     --output renders\frames ^
     --resolution 7680x4320 ^
@@ -135,7 +135,7 @@ The RTX 3090 (24 GB VRAM, 10,496 CUDA cores) is significantly faster than the M4
 > These estimates are based on the M4 benchmark and typical 3090 vs M4 GPU throughput ratios. Run a 10-frame test at 8K to get your actual number:
 
 ```bat
-"C:\Program Files\Blender Foundation\Blender 4.3\blender.exe" --background --python animation\render.py -- ^
+"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python animation\render.py -- ^
     --parquet data\processed\all_galaxies.parquet ^
     --output renders\test_8k ^
     --resolution 7680x4320 ^
@@ -162,7 +162,7 @@ Benchmark both with a 10-frame test and decide based on quality vs. speed.
 ### Blender not found
 Edit `scripts\batch_render_windows.bat` and update the `BLENDER` variable to your actual Blender install path:
 ```bat
-set "BLENDER=C:\Program Files\Blender Foundation\Blender 4.3\blender.exe"
+set "BLENDER=C:\Program Files\Blender Foundation\Blender 5.1\blender.exe"
 ```
 
 ### ffmpeg not on PATH

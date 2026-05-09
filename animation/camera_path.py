@@ -127,9 +127,25 @@ def apply_keyframes(camera_obj: bpy.types.Object, fps: int = DEFAULT_FPS) -> Non
         cam.lens = kf.lens_mm
         cam.keyframe_insert(data_path="lens", frame=kf.frame)
 
-    # Smooth bezier interpolation on all curves
+    # Smooth bezier interpolation on all curves.
+    # Blender 5.0+ redesigned the Action system: fcurves are now accessed via
+    # action.layers[].strips[].channelbag(slot).fcurves rather than action.fcurves.
     for action in bpy.data.actions:
-        for fcurve in action.fcurves:
+        if hasattr(action, "fcurves"):
+            # Blender 4.x legacy path
+            fcurve_iter = action.fcurves
+        else:
+            # Blender 5.0+ layered Action path
+            fcurve_iter = []
+            for layer in action.layers:
+                for strip in layer.strips:
+                    for slot in action.slots:
+                        try:
+                            cb = strip.channelbag(slot)
+                            fcurve_iter = list(cb.fcurves)
+                        except Exception:
+                            pass
+        for fcurve in fcurve_iter:
             for kfp in fcurve.keyframe_points:
                 kfp.interpolation = "BEZIER"
                 kfp.easing = "AUTO"

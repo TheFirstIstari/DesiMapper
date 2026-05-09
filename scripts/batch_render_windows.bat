@@ -5,7 +5,7 @@ REM Renders 8K frames in chunks, encodes each chunk to H.265 MP4 via NVENC,
 REM then deletes PNG frames before the next chunk to cap disk usage.
 REM
 REM Requirements:
-REM   - Blender 4.3+ installed (default path or set BLENDER below)
+REM   - Blender 4.3+ or 5.x installed (default path or set BLENDER below)
 REM   - ffmpeg on PATH (winget install ffmpeg, or https://ffmpeg.org)
 REM   - NVIDIA GPU with CUDA 12+ drivers installed
 REM   - Python data pipeline already run (data\processed\all_galaxies.parquet exists)
@@ -22,13 +22,19 @@ REM   scripts\batch_render_windows.bat
 setlocal enabledelayedexpansion
 
 REM ─── Configuration ─────────────────────────────────────────────────────────
-set "BLENDER=%PROGRAMFILES%\Blender Foundation\Blender 4.3\blender.exe"
+set "BLENDER=%PROGRAMFILES%\Blender Foundation\Blender 5.1\blender.exe"
+if not exist "%BLENDER%" (
+    set "BLENDER=%PROGRAMFILES%\Blender Foundation\Blender 5.0\blender.exe"
+)
 if not exist "%BLENDER%" (
     set "BLENDER=%PROGRAMFILES%\Blender Foundation\Blender 4.4\blender.exe"
 )
 if not exist "%BLENDER%" (
+    set "BLENDER=%PROGRAMFILES%\Blender Foundation\Blender 4.3\blender.exe"
+)
+if not exist "%BLENDER%" (
     echo ERROR: Blender not found at default paths. Set the BLENDER variable in this script.
-    echo   Expected: %PROGRAMFILES%\Blender Foundation\Blender 4.3\blender.exe
+    echo   Searched: Blender 5.1, 5.0, 4.4, 4.3 under %PROGRAMFILES%\Blender Foundation\
     pause
     exit /b 1
 )

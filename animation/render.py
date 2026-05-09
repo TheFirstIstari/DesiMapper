@@ -112,7 +112,13 @@ def configure_gpu(scene):
     import bpy
     import multiprocessing
 
-    prefs = bpy.context.preferences.addons["cycles"].preferences
+    # Cycles addon key is "cycles" in 4.x and 5.x, but scan all addons
+    # to be robust against any future rename (e.g. bundled-extension ID changes).
+    cycles_key = next(
+        (k for k in bpy.context.preferences.addons.keys() if "cycl" in k.lower()),
+        "cycles",   # fallback — may raise KeyError if Cycles isn't enabled
+    )
+    prefs = bpy.context.preferences.addons[cycles_key].preferences
 
     for device_type in ("OPTIX", "CUDA", "HIP", "ONEAPI", "METAL"):
         try:
@@ -242,17 +248,38 @@ def main():
     # crossover point where CPU compression time == disk write time.
     # compress=0 is slower (larger writes); compress=15+ is slower (more CPU).
     # For an emission-only scene 8-bit has no visible quality loss vs 16-bit.
-    scene.render.image_settings.file_format = "PNG"
-    scene.render.image_settings.color_mode = "RGB"
-    scene.render.image_settings.color_depth = "8"
-    scene.render.image_settings.compression = 5
+    #
+    # Blender 5.0+ breaking change: ImageFormatSettings now requires media_type
+    # to be set before file_format. In 4.x this attribute doesn't exist, so we
+    # set it only when available.
+    img_fmt = scene.render.image_settings
+    if hasattr(img_fmt, "media_type"):
+        img_fmt.media_type = "IMAGE"   # required in Blender 5.0+ before file_format
+    img_fmt.file_format = "PNG"
+    img_fmt.color_mode = "RGB"
+    img_fmt.color_depth = "8"
+    img_fmt.compression = 5
 
-    # Colour management — Filmic with gentle contrast for space visualization
-    # "High Contrast" clips emission colors; use medium contrast instead
-    scene.view_settings.view_transform = "Filmic"
-    scene.view_settings.look = "Medium Contrast"
-    scene.view_settings.exposure = -0.5   # bring down to preserve tracer color hues
-    scene.view_settings.gamma = 1.0
+    # Colour management — tone-mapped for space visualization.
+    # Blender 5.0+ uses AgX instead of Filmic. We prefer AgX when available
+    # (Blender 4.2+), then fall back to Filmic (4.x), then Raw.
+    # "Medium Contrast" look exists in Filmic; AgX uses different look names.
+    vs = scene.view_settings
+    try:
+        vs.view_transform = "AgX"
+        # AgX look names differ from Filmic — "Medium Contrast" doesn't exist.
+        # "None" is neutral; use it rather than risking an invalid look name.
+        vs.look = "None"
+        print("  Color management: AgX / None")
+    except TypeError:
+        try:
+            vs.view_transform = "Filmic"
+            vs.look = "Medium Contrast"
+            print("  Color management: Filmic / Medium Contrast")
+        except TypeError:
+            pass  # leave at scene defaults
+    vs.exposure = -0.5   # bring down to preserve tracer color hues
+    vs.gamma = 1.0
 
     # GPU setup
     if args.device == "auto":
