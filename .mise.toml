@@ -1,0 +1,45 @@
+[tools]
+python = "3.12"
+node = "20"
+
+[env]
+DESI_BASE_URL = "https://data.desi.lbl.gov/public/dr1/vac/dr1/lss/guadalupe/v1.0/LSScats/clustering"
+DESI_DATA_DIR = "{{cwd}}/data/raw"
+DESI_PROCESSED_DIR = "{{cwd}}/data/processed"
+PYTHONPATH = "{{cwd}}"
+
+[tasks.install]
+description = "Install all dependencies"
+run = "pip install -r pipeline/requirements.txt && cd web && npm install"
+
+[tasks.fetch]
+description = "Download DESI clustering catalogs"
+run = "python pipeline/fetch.py"
+
+[tasks.process]
+description = "Process FITS → Parquet + binary"
+run = "python pipeline/process.py"
+
+[tasks.export-web]
+description = "Export reduced dataset for web viewer"
+run = "python pipeline/reduce.py"
+
+[tasks.pipeline]
+description = "Run full data pipeline (fetch → process → export)"
+run = "mise run fetch && mise run process && mise run export-web"
+
+[tasks.web-dev]
+description = "Start web viewer in development mode"
+run = "cd web && npm run dev"
+
+[tasks.web-build]
+description = "Build web viewer for production"
+run = "cd web && npm run build"
+
+[tasks.deploy]
+description = "Deploy web viewer to Fedora MiniPC"
+run = "bash scripts/deploy.sh"
+
+[tasks.animate]
+description = "Render the 3D animation (requires Blender)"
+run = "python animation/render.py"
