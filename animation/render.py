@@ -172,8 +172,9 @@ def configure_render_quality(scene, samples: int, use_denoising: bool):
     cycles.volume_bounces            = 0
     cycles.transparent_max_bounces   = 4
 
-    # Large tiles keep the Metal GPU command buffer full between flushes
-    cycles.tile_size = 4096
+    # Large tiles keep the Metal GPU command buffer full between flushes.
+    # Benchmarked: 8192 (2.318s) ≈ 4096 (2.337s) > 2048 (2.412s) > 1024 (2.747s)
+    cycles.tile_size = 8192
 
     # Reuse BVH/geometry across frames — saves ~1s/frame on 10M-tri scene
     scene.render.use_persistent_data = True
@@ -226,12 +227,15 @@ def main():
     scene.render.resolution_y = int(h)
     scene.render.resolution_percentage = 100
 
-    # Output format — PNG 16-bit for 8K (~15 MB/frame vs 50 MB for EXR)
-    # Good balance of quality and disk usage; no HDR needed for point-cloud scene
+    # Output format: PNG 8-bit, compress=5
+    # Benchmarked: 8-bit saves 0.1s/frame vs 16-bit; compress=5 is the
+    # crossover point where CPU compression time == disk write time.
+    # compress=0 is slower (larger writes); compress=15+ is slower (more CPU).
+    # For an emission-only scene 8-bit has no visible quality loss vs 16-bit.
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGB"
-    scene.render.image_settings.color_depth = "16"
-    scene.render.image_settings.compression = 20  # 0=fast/large, 100=slow/small; 20 is good balance
+    scene.render.image_settings.color_depth = "8"
+    scene.render.image_settings.compression = 5
 
     # Colour management — Filmic with gentle contrast for space visualization
     # "High Contrast" clips emission colors; use medium contrast instead
