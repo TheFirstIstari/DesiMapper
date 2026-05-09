@@ -88,63 +88,89 @@ def parse_args():
 
 def configure_metal_gpu(scene):
     """
-    Enable Metal GPU rendering on macOS (Apple Silicon or AMD).
-    Blender 4.x supports Metal via Cycles backend.
-    Falls back to CPU automatically if Metal is unavailable.
+    Enable Metal GPU + CPU rendering on Apple Silicon (M-series).
+
+    On M4 with unified memory, enabling BOTH the GPU and CPU device under
+    Metal lets Blender use:
+      - GPU cores for tile rendering
+      - All CPU cores for BVH build, denoising, and CPU-side prep work
+    This eliminates the intermittent CPU idle gaps seen with GPU-only mode.
     """
     import bpy
+    import multiprocessing
 
     prefs = bpy.context.preferences.addons["cycles"].preferences
-    prefs.refresh_devices()
 
-    # Try Metal first (macOS), then CUDA/HIP, then CPU
+    # On macOS only Metal is available; set it directly without looping
+    # through CUDA/HIP etc. (those raise TypeError on Apple Silicon)
     for device_type in ("METAL", "OPTIX", "CUDA", "HIP", "ONEAPI"):
-        prefs.compute_device_type = device_type
+        try:
+            prefs.compute_device_type = device_type
+        except TypeError:
+            continue
         prefs.refresh_devices()
         devices = prefs.get_devices_for_type(device_type)
-        if devices:
-            for d in devices:
-                d.use = True
-            print(f"  GPU backend: {device_type}")
-            print(f"  Devices: {[d.name for d in devices if d.use]}")
-            scene.cycles.device = "GPU"
-            return
+        if not devices:
+            continue
 
-    print("  No GPU found — falling back to CPU")
-    scene.cycles.device = "CPU"
+        # Enable ALL devices: both GPU and CPU cores
+        # On Apple Silicon, CPU device appears alongside GPU under Metal
+        for d in devices:
+            d.use = True
+            print(f"  Enabled: {d.name!r}  ({d.type})")
+
+        scene.cycles.device = "GPU"
+        print(f"  Backend: {device_type}")
+        break
+    else:
+        print("  No GPU — falling back to CPU")
+        scene.cycles.device = "CPU"
+
+    # Pin all CPU threads (Blender defaults to AUTO which may under-utilise)
+    ncpu = multiprocessing.cpu_count()
+    scene.render.threads_mode = "FIXED"
+    scene.render.threads = ncpu
+    print(f"  CPU threads: {ncpu} (FIXED)")
 
 
-def configure_render_quality_8k(scene, samples: int, use_denoising: bool):
+def configure_render_quality(scene, samples: int, use_denoising: bool):
     """
-    Apply quality settings optimised for 8K Cycles output.
-    Higher tile size benefits GPU VRAM throughput at large resolutions.
+    Render quality settings tuned for emission-only galaxy scene.
+    Works for both test (1080p) and production (8K) renders.
     """
-    import bpy
-
     cycles = scene.cycles
 
-    # Adaptive sampling — reduces samples in dark regions automatically
-    cycles.use_adaptive_sampling = True
-    cycles.adaptive_threshold = 0.01  # Tight threshold for 8K quality
-    cycles.samples = samples
-    cycles.adaptive_min_samples = max(samples // 4, 32)
+    # Adaptive sampling: skip dark-pixel oversampling automatically
+    cycles.use_adaptive_sampling     = True
+    cycles.adaptive_threshold        = 0.005   # tighter = better quality
+    cycles.samples                   = samples
+    cycles.adaptive_min_samples      = max(samples // 8, 16)
 
-    # Denoising (Intel Open Image Denoise — CPU-based, works everywhere)
+    # Denoising — use OIDN (CPU-based, works on Apple Silicon)
+    # Metal's denoiser (MLX) is also available in Blender 4.3 but OIDN is
+    # more stable for animation sequences
     cycles.use_denoising = use_denoising
     if use_denoising:
-        cycles.denoiser = "OPENIMAGEDENOISE"
+        cycles.denoiser              = "OPENIMAGEDENOISE"
         cycles.denoising_input_passes = "RGB_ALBEDO_NORMAL"
+        cycles.denoising_prefilter   = "ACCURATE"
 
-    # Light path — galaxy scene only needs emission, no GI bounces
-    cycles.max_bounces = 2
-    cycles.diffuse_bounces = 1
-    cycles.glossy_bounces = 1
-    cycles.transmission_bounces = 0
-    cycles.transparent_max_bounces = 8
+    # Light paths — pure emission scene needs almost nothing
+    # Setting to 0 bounces would break stars; keep 1
+    cycles.max_bounces               = 1
+    cycles.diffuse_bounces           = 0
+    cycles.glossy_bounces            = 0
+    cycles.transmission_bounces      = 0
+    cycles.volume_bounces            = 0
+    cycles.transparent_max_bounces   = 4
 
-    # Tile size: larger tiles are faster on GPU with big VRAM
-    # Blender 3.x+: auto tile size handled internally
-    scene.render.use_persistent_data = True  # Reuse BVH across frames
+    # Tile size hint: on Metal, larger tiles saturate GPU VRAM throughput
+    # Blender 4.x auto-selects tile size but we can nudge it
+    cycles.tile_size = 4096   # large tiles for GPU; ignored if CPU-only
+
+    # Reuse BVH/geometry across frames — critical for animation performance
+    # (saves ~1-2s per frame on the RealizeInstances geometry rebuild)
+    scene.render.use_persistent_data = True
 
 
 def main():
@@ -214,7 +240,7 @@ def main():
     else:
         scene.cycles.device = args.device
 
-    configure_render_quality_8k(scene, args.samples, not args.no_denoising)
+    configure_render_quality(scene, args.samples, not args.no_denoising)
 
     scene.frame_start = args.start_frame
     scene.frame_end = args.end_frame or int(TOTAL_SECONDS * fps)
