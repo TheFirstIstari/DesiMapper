@@ -73,23 +73,37 @@ mise run deploy
 # Builds → pushes via rsync through Azure jump host → configures nginx on both machines
 ```
 
-### Render the Animation (8K 60fps on MacBook)
+### Render the Animation (8K 60fps)
 
+The render script auto-detects the best available GPU backend (OptiX → CUDA → Metal → CPU). No configuration needed — just run it.
+
+**macOS (Metal / Apple Silicon):**
 ```bash
-# Requires Blender 4.x and processed galaxy data
-# Blender auto-detects Metal GPU on macOS
-
-# Quick test render at 1080p (minutes, not hours)
+# Quick test at 1080p
 blender --background --python animation/render.py -- \
   --resolution 1920x1080 --samples 32 --max-points 200000
 
-# Full 8K 60fps production render (~24-48h depending on GPU)
-blender --background --python animation/render.py -- \
-  --resolution 7680x4320 --fps 60 --samples 128
+# Full 8K production render (batched, manages disk space automatically)
+bash scripts/batch_render.sh
 
-# Encode EXR frames → YouTube-ready H.265 MP4
+# Encode frames → YouTube-ready H.265 MP4
 bash scripts/encode_video.sh
 ```
+
+**Windows (NVIDIA GPU — OptiX/NVENC):**
+```bat
+REM Quick test at 1080p
+"C:\Program Files\Blender Foundation\Blender 4.3\blender.exe" --background --python animation\render.py -- ^
+  --resolution 1920x1080 --samples 32 --max-points 200000
+
+REM Full 8K production render (batched, manages disk space automatically)
+scripts\batch_render_windows.bat
+
+REM Encode frames → YouTube-ready H.265 MP4 (NVENC GPU encoding)
+scripts\encode_video_windows.bat
+```
+
+See [WINDOWS_RENDER.md](WINDOWS_RENDER.md) for full Windows setup instructions.
 
 ---
 
@@ -194,7 +208,8 @@ Total download: ~150 MB (vs 279 TB full release).
 
 | Machine | Role | Notes |
 |---------|------|-------|
-| MacBook (macOS) | Development, pipeline, **animation rendering** | Metal GPU → Blender Cycles |
+| MacBook (macOS) | Development, pipeline | Metal GPU → Blender Cycles (backup renderer) |
+| Windows PC (7800X3D + RTX 3090) | **Primary animation renderer** | OptiX → Blender Cycles, NVENC encoding |
 | Raspberry Pi (`100.68.179.53`) | FITS archive + pipeline storage | 1 TB, `/projects` |
 | Fedora MiniPC (`100.82.166.71`) | Static web server (nginx) | AMD 7940HS, Tailscale only |
 | Azure VM | Public reverse proxy (nginx) | Forwards HTTP → MiniPC via Tailscale |

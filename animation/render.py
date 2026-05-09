@@ -86,24 +86,35 @@ def parse_args():
     return parser.parse_args(argv)
 
 
-def configure_metal_gpu(scene):
+def configure_gpu(scene):
     """
-    Enable Metal GPU + CPU rendering on Apple Silicon (M-series).
+    Auto-detect and enable the best available GPU backend for Cycles.
 
-    On M4 with unified memory, enabling BOTH the GPU and CPU device under
-    Metal lets Blender use:
-      - GPU cores for tile rendering
-      - All CPU cores for BVH build, denoising, and CPU-side prep work
-    This eliminates the intermittent CPU idle gaps seen with GPU-only mode.
+    Priority order:
+      1. OptiX  — NVIDIA RTX/GTX (Windows/Linux), fastest on CUDA-capable GPUs.
+                  Enables hardware RT cores and OptiX denoiser.
+      2. CUDA   — NVIDIA fallback if OptiX not available (older GPUs, some Linux).
+      3. HIP    — AMD GPUs (ROCm, Linux/Windows).
+      4. ONEAPI — Intel Arc (Windows).
+      5. Metal  — Apple Silicon / AMD on macOS.
+      6. CPU    — Software fallback.
+
+    On macOS, CUDA/OptiX raise TypeError immediately (not available), so the
+    loop safely skips them and lands on Metal.
+
+    On Windows with an NVIDIA 3090:
+      - OptiX will succeed at step 1.
+      - Both the GPU and CPU devices are enabled so Blender uses CPU threads
+        for BVH build, scene prep, and denoising while the GPU renders tiles.
+      - With OptiX enabled, denoising is very fast (GPU-side RT-aware kernel).
+        Consider removing --no-denoising for the Windows production render.
     """
     import bpy
     import multiprocessing
 
     prefs = bpy.context.preferences.addons["cycles"].preferences
 
-    # On macOS only Metal is available; set it directly without looping
-    # through CUDA/HIP etc. (those raise TypeError on Apple Silicon)
-    for device_type in ("METAL", "OPTIX", "CUDA", "HIP", "ONEAPI"):
+    for device_type in ("OPTIX", "CUDA", "HIP", "ONEAPI", "METAL"):
         try:
             prefs.compute_device_type = device_type
         except TypeError:
@@ -113,8 +124,7 @@ def configure_metal_gpu(scene):
         if not devices:
             continue
 
-        # Enable ALL devices: both GPU and CPU cores
-        # On Apple Silicon, CPU device appears alongside GPU under Metal
+        # Enable ALL devices (GPU + CPU appear together under OPTIX/CUDA/Metal)
         for d in devices:
             d.use = True
             print(f"  Enabled: {d.name!r}  ({d.type})")
@@ -123,7 +133,7 @@ def configure_metal_gpu(scene):
         print(f"  Backend: {device_type}")
         break
     else:
-        print("  No GPU — falling back to CPU")
+        print("  No GPU backend available — falling back to CPU")
         scene.cycles.device = "CPU"
 
     # Pin all CPU threads (Blender defaults to AUTO which may under-utilise)
@@ -246,7 +256,7 @@ def main():
 
     # GPU setup
     if args.device == "auto":
-        configure_metal_gpu(scene)
+        configure_gpu(scene)
     else:
         scene.cycles.device = args.device
 
