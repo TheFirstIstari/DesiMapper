@@ -168,9 +168,9 @@ You can run the render pipeline from WSL2 (Ubuntu) instead of native Windows Pow
 ```bash
 # Download the Blender 5.1 Linux tarball (self-contained, no install needed)
 cd ~
-wget https://mirrors.dotsrc.org/blender/release/Blender5.1/blender-5.1.0-linux-x64.tar.xz
-tar -xf blender-5.1.0-linux-x64.tar.xz
-export BLENDER=~/blender-5.1.0-linux-x64/blender
+wget https://mirrors.dotsrc.org/blender/release/Blender5.1/blender-5.1.1-linux-x64.tar.xz
+tar -xf blender-5.1.1-linux-x64.tar.xz
+export BLENDER=~/blender-5.1.1-linux-x64/blender
 
 # Verify it starts headlessly
 $BLENDER --background --version
