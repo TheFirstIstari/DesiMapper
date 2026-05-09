@@ -157,7 +157,64 @@ Benchmark both with a 10-frame test and decide based on quality vs. speed.
 
 ---
 
-## 8. Troubleshooting
+## 8. WSL2 Alternative (Running from Ubuntu on Windows)
+
+You can run the render pipeline from WSL2 (Ubuntu) instead of native Windows PowerShell/CMD. The GPU is still your RTX 3090 via CUDA — there is no performance penalty.
+
+**Do NOT install Blender via Snap in WSL2.** Snap requires systemd which WSL2 doesn't fully support, and the Snap-confined Blender cannot find X11 libraries (`libSM.so.6`, `libICE.so.6`, etc.) in a headless environment, causing an immediate crash.
+
+### Install Blender from the official tarball instead
+
+```bash
+# Download the Blender 5.1 Linux tarball (self-contained, no install needed)
+cd ~
+wget https://mirrors.dotsrc.org/blender/release/Blender5.1/blender-5.1.0-linux-x64.tar.xz
+tar -xf blender-5.1.0-linux-x64.tar.xz
+export BLENDER=~/blender-5.1.0-linux-x64/blender
+
+# Verify it starts headlessly
+$BLENDER --background --version
+```
+
+You should see `Blender 5.1.0` printed. If you still get a missing library error, install the handful of X11 stubs that Blender links against (they don't actually open a display in `--background` mode):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y libsm6 libice6 libxext6 libxrender1 libgl1
+```
+
+Then retry `$BLENDER --background --version`.
+
+### Run the render from WSL2
+
+Clone the repo (or access it via the Windows filesystem at `/mnt/c/...`), then:
+
+```bash
+# If repo is on the Windows side
+cd /mnt/c/DesiMapper
+
+# Activate the Python venv you set up (or create a new one in WSL2)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r pipeline/requirements.txt
+
+# Quick test render (adjust paths as needed)
+$BLENDER --background --python animation/render.py -- \
+    --parquet data/processed/all_galaxies.parquet \
+    --output /mnt/c/DesiMapper/renders/test/ \
+    --resolution 1920x1080 \
+    --samples 32 \
+    --max-points 100000 \
+    --start-frame 1 --end-frame 1
+```
+
+In the output you should see `Backend: OPTIX` or `Backend: CUDA` — your RTX 3090 is being used.
+
+> **Note:** Output paths written by Blender running in WSL2 can be on the Windows filesystem (`/mnt/c/...`) or on the WSL2 filesystem (`~/...`). Writing to `/mnt/c/` is slightly slower due to the 9P filesystem bridge; writing to the WSL2 native filesystem (`/home/...`) and then copying is faster for large frame counts.
+
+---
+
+## 9. Troubleshooting
 
 ### Blender not found
 Edit `scripts\batch_render_windows.bat` and update the `BLENDER` variable to your actual Blender install path:
@@ -189,7 +246,7 @@ scripts\batch_render_windows.bat 600 resume
 
 ---
 
-## 9. After Rendering
+## 10. After Rendering
 
 Transfer the final `renders\desimapper_8k_60fps.mp4` to wherever you plan to upload from. The file will be roughly 40–80 GB depending on scene complexity.
 
