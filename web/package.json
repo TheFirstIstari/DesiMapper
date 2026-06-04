@@ -11,6 +11,9 @@
   },
   "keywords": ["desi", "cosmology", "three.js", "galaxy", "webgl"],
   "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "dependencies": {
     "three": "^0.184.0"
   },
