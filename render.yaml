@@ -5,6 +5,8 @@ services:
     buildCommand: cd web && npm ci && npm run build
     staticPublishPath: web/dist
     pullRequestPreviewsEnabled: false
+    domains:
+      - desi.tweak.wiki
     headers:
       - path: /data/*.bin
         name: Cache-Control
