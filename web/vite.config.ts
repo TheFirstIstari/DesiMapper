@@ -5,13 +5,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     target: "es2020",
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          three: ["three"],
-        },
-      },
-    },
+    chunkSizeWarningLimit: 600,
   },
   server: {
     port: 5173,
