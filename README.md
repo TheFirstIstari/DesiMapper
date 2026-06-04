@@ -56,10 +56,35 @@ mise run web-dev
 # → http://localhost:5173
 ```
 
-### Deploy to Production
+### Deploy to Production (Render.com)
 
-The web viewer is hosted on a Fedora MiniPC behind a residential ISP (no port-forward).
-An Azure VM acts as the public-facing reverse proxy, forwarding traffic via Tailscale:
+The web viewer is hosted as a **Render Static Site** — zero servers, zero maintenance.
+
+**First deploy:**
+1. Push this repo to GitHub (or GitLab)
+2. Go to [render.com](https://render.com) → **New → Blueprint** → connect the repo
+3. Render reads `render.yaml` automatically and creates the static site
+4. (Optional) Add a custom domain in the Render dashboard → set a CNAME on your DNS
+
+**Auto-deploys:** every `git push` to `main` triggers a rebuild + redeploy (~30s).
+
+**Manual deploy:**
+```bash
+# Just push — Render handles the rest
+git push origin main
+```
+
+> **Note:** `web/public/data/galaxies.bin` (~21 MB) is committed to the repo so
+> Render can serve it without a pipeline run. If you regenerate the binary via
+> `mise run export-web`, commit the updated file and push.
+
+#### Legacy self-hosted infrastructure (deprecated)
+
+<details>
+<summary>Azure VM + Tailscale + Fedora MiniPC setup</summary>
+
+The web viewer was previously hosted on a Fedora MiniPC behind a residential ISP (no port-forward).
+An Azure VM acted as the public-facing reverse proxy, forwarding traffic via Tailscale:
 
 ```
 Browser → Azure VM (public IP) → Tailscale mesh → Fedora MiniPC (100.82.166.71)
@@ -72,6 +97,8 @@ export AZURE_HOST="root@<YOUR_AZURE_VM_IP>"
 mise run deploy
 # Builds → pushes via rsync through Azure jump host → configures nginx on both machines
 ```
+
+</details>
 
 ### Render the Animation (8K 60fps)
 
