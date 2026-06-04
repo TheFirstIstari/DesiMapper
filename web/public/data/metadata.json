@@ -1,0 +1,68 @@
+{
+  "version": 2,
+  "n_points": 1397612,
+  "tracers": {
+    "0": {
+      "name": "BGS",
+      "color": "#FF8C00",
+      "z_range": [
+        0.01,
+        0.6
+      ]
+    },
+    "1": {
+      "name": "LRG",
+      "color": "#CC2200",
+      "z_range": [
+        0.4,
+        1.1
+      ]
+    },
+    "2": {
+      "name": "ELG",
+      "color": "#00CED1",
+      "z_range": [
+        0.8,
+        1.6
+      ]
+    },
+    "3": {
+      "name": "QSO",
+      "color": "#8888FF",
+      "z_range": [
+        0.8,
+        2.1
+      ]
+    }
+  },
+  "bounds": {
+    "x": [
+      -6888.23974609375,
+      6580.48828125
+    ],
+    "y": [
+      -6742.703125,
+      142.42105102539062
+    ],
+    "z": [
+      -1357.2869873046875,
+      6271.5107421875
+    ]
+  },
+  "cosmology": {
+    "H0": 67.4,
+    "Om0": 0.315,
+    "model": "FlatLambdaCDM"
+  },
+  "data_release": "DESI DR1 guadalupe/v1.0",
+  "sampling": "none \u2014 full catalog",
+  "color_encoding": {
+    "field": "color_byte (byte offset 13 per record)",
+    "description": "g-r colour from dereddened DESI fluxes (BGS only; 128=neutral for other tracers)",
+    "gr_min": -0.5,
+    "gr_max": 2.5,
+    "byte_0": "blue/star-forming (g-r=-0.5)",
+    "byte_128": "neutral",
+    "byte_255": "red/passive (g-r=2.5)"
+  }
+}

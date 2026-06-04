@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: desimapper
+    runtime: static
+    buildCommand: cd web && npm ci && npm run build
+    staticPublishPath: web/dist
+    pullRequestPreviewsEnabled: false
+    headers:
+      - path: /data/*.bin
+        name: Cache-Control
+        value: "public, max-age=31536000, immutable"
+      - path: /data/metadata.json
+        name: Cache-Control
+        value: "public, max-age=3600"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
