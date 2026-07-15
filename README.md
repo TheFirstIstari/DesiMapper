@@ -11,7 +11,7 @@ DesiMapper is a high-performance data pipeline and dual-output visualization too
 
 ## What is DESI?
 
-DESI is a spectroscopic survey instrument on the Nicholas U. Mayall 4-meter Telescope at Kitt Peak National Observatory. DR1 contains spectra for over 40 million celestial objects observed across one third of the sky. This project uses the **Large Scale Structure (LSS) clustering catalogs** — the clustering-ready galaxy positions for four tracer types:
+DESI is a spectroscopic survey instrument on the Nicholas U. Mayall 4-meter Telescope at Kitt Peak National Observatory. DR1 contains spectra for over 40 million celestial objects observed across one third of the sky. This project uses the **Large Scale Structure (LSS) full catalogs** — the complete observed galaxy sample for four tracer types (BGS, LRG, ELG, QSO), rendered as a 3D point cloud.
 
 | Tracer | Colour | Redshift Range | Physics |
 |--------|--------|----------------|---------|
@@ -201,18 +201,20 @@ Per point (16 bytes): x f32 | y f32 | z f32 | tracer u8 | pad u8 | z_encoded u16
 
 ## Data Source
 
-**DESI DR1 LSS Clustering Catalogs**
+**DESI DR1 LSS Full Catalogs**
 ```
-https://data.desi.lbl.gov/public/dr1/vac/dr1/lss/guadalupe/v1.0/LSScats/clustering/
+https://data.desi.lbl.gov/public/dr1/vac/dr1/lss/guadalupe/v1.0/LSScats/full/
 ```
 
-Files used (`*_clustering.dat.fits` — galaxy data only, not randoms):
-- `BGS_BRIGHT_{N,S}_clustering.dat.fits`
-- `LRG_{N,S}_clustering.dat.fits`
-- `ELG_LOPnotqso_{N,S}_clustering.dat.fits`
-- `QSO_{N,S}_clustering.dat.fits`
+Files used (`*_full.dat.fits` — the **complete observed sample**, not the cosmology
+`clustering` subset which drops ~half of BGS and most ELG/LRG):
+- `BGS_BRIGHT_full.dat.fits`
+- `LRG_full.dat.fits`
+- `ELG_LOPnotqso_full.dat.fits`
+- `QSO_full.dat.fits`
 
-Total download: ~150 MB (vs 279 TB full release).
+Total download: ~2.4 GB (vs 279 TB full release). Produces ~3.5M galaxies
+in the web binary.
 
 ---
 

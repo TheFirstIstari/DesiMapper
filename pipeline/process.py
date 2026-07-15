@@ -1,7 +1,8 @@
 """
 process.py — Convert DESI FITS catalogs to XYZ Cartesian coordinates.
 
-Reads RA, Dec, Z from clustering .dat.fits files, converts to comoving
+Reads RA, Dec, Z from the DESI LSS *full* .dat.fits files (complete observed
+sample), converts to comoving
 Cartesian coordinates (Mpc) using Planck 2018 flat ΛCDM cosmology,
 and writes Parquet files for further processing.
 """
@@ -70,12 +71,24 @@ def process_fits(fits_path: Path, tracer_id: int) -> pa.Table:
         data = hdul["LSS"].data
         ra = np.asarray(data["RA"], dtype=np.float64)
         dec = np.asarray(data["DEC"], dtype=np.float64)
-        z = np.asarray(data["Z"], dtype=np.float64)
-        weight = np.asarray(data["WEIGHT"], dtype=np.float32)
-
+        # Redshift column name differs: `clustering` uses Z, `full` uses Z_not4clus
+        z = np.asarray(data["Z"] if "Z" in data.columns.names else data["Z_not4clus"], dtype=np.float64)
+        # WEIGHT only exists in clustering files; `full` omits it — unused downstream
+        wname = "WEIGHT" if "WEIGHT" in data.columns.names else None
+        weight = np.asarray(data[wname], dtype=np.float32) if wname else np.ones(len(z), dtype=np.float32)
     # Quality cuts: valid redshifts only
     mask = (z > 0.001) & (z < 5.0) & np.isfinite(ra) & np.isfinite(dec)
     ra, dec, z, weight = ra[mask], dec[mask], z[mask], weight[mask]
+
+    # Flux cols are lowercase in clustering, uppercase (FLUX_G) in full
+    def _flux(suffix: str) -> np.ndarray:
+        lname = f"flux_{suffix}".lower()
+        for c in data.columns.names:
+            if c.lower() == lname:
+                return np.asarray(data[c], dtype=np.float32)[mask]
+        return np.zeros(len(ra), dtype=np.float32)
+    flux_g = _flux("g")
+    flux_r = _flux("r")
 
     x, y, z_cart = radec_z_to_xyz(ra, dec, z)
 
@@ -88,6 +101,8 @@ def process_fits(fits_path: Path, tracer_id: int) -> pa.Table:
             "y": pa.array(y),
             "z_cart": pa.array(z_cart),
             "weight": pa.array(weight),
+            "flux_g": pa.array(flux_g),
+            "flux_r": pa.array(flux_r),
             "tracer": pa.array(np.full(len(ra), tracer_id, dtype=np.uint8)),
         }
     )
@@ -99,7 +114,7 @@ def process_all() -> None:
     console.rule("[bold cyan]DESI DR1 — FITS → Parquet Processing")
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-    fits_files = sorted(DATA_DIR.glob("*_clustering.dat.fits"))
+    fits_files = sorted(DATA_DIR.glob("*_full.dat.fits"))
     if not fits_files:
         console.print(f"[red]No .dat.fits files found in {DATA_DIR}/[/]")
         console.print("Run [bold]mise run fetch[/] first.")
@@ -134,7 +149,7 @@ def process_all() -> None:
             z_max = max(z_arr)
 
             stats_table.add_row(
-                fits_path.name.replace("_clustering.dat.fits", ""),
+                fits_path.name.replace("_full.dat.fits", ""),
                 TRACER_NAMES[tracer_id],
                 f"{len(table):,}",
                 f"{z_min:.3f}–{z_max:.3f}",

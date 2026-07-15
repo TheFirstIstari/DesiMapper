@@ -118,14 +118,22 @@ def export_web() -> None:
     n_total = len(table)
     console.print(f"  Total galaxies: {n_total:,}")
 
-    # Extract all columns as numpy arrays in one pass
+    # `clustering` catalogs lowercase flux cols (flux_g); `full` uppercases (FLUX_G).
+    # Resolve case-insensitively so both work.
+    def _col(name: str) -> str:
+        lname = name.lower()
+        for c in table.column_names:
+            if c.lower() == lname:
+                return c
+        raise KeyError(f"column {name} not found (have {table.column_names})")
+
     x      = np.array(table["x"],      dtype=np.float32)
     y      = np.array(table["y"],      dtype=np.float32)
     z_cart = np.array(table["z_cart"], dtype=np.float32)
     z_red  = np.array(table["z"],      dtype=np.float32)
     tracer = np.array(table["tracer"], dtype=np.uint8)
-    flux_g = np.array(table["flux_g"], dtype=np.float32)
-    flux_r = np.array(table["flux_r"], dtype=np.float32)
+    flux_g = np.array(table[_col("flux_g")], dtype=np.float32)
+    flux_r = np.array(table[_col("flux_r")], dtype=np.float32)
 
     color_byte = _gr_to_byte(flux_g, flux_r)
 
@@ -179,7 +187,7 @@ def export_web() -> None:
         },
         "cosmology":    {"H0": 67.4, "Om0": 0.315, "model": "FlatLambdaCDM"},
         "data_release": "DESI DR1 guadalupe/v1.0",
-        "sampling":     "none — full catalog",
+        "sampling":     "DESI DR1 guadalupe `full` sample — complete observed catalog (all galaxies, not the cosmology clustering subset)",
         "color_encoding": {
             "field": "color_byte (byte offset 13 per record)",
             "description": "g-r colour from dereddened DESI fluxes (BGS only; 128=neutral for other tracers)",

@@ -25,23 +25,20 @@ console = Console()
 
 BASE_URL = os.environ.get(
     "DESI_BASE_URL",
-    "https://data.desi.lbl.gov/public/dr1/vac/dr1/lss/guadalupe/v1.0/LSScats/clustering",
+    "https://data.desi.lbl.gov/public/dr1/vac/dr1/lss/guadalupe/v1.0/LSScats/full",
 )
 
 DATA_DIR = Path(os.environ.get("DESI_DATA_DIR", "data/raw"))
 
-# Only the galaxy data catalogs — NOT the large random files (*.ran.fits)
+# Use the COMPLETE observed sample (`full`), not the `clustering` subset cut.
+# `full` includes every observed galaxy (the clustering catalogs drop ~half of BGS
+# and most ELG/LRG for cosmology weighting). Same FITS schema — process_fits
+# reads RA/DEC/Z/WEIGHT/flux by name unchanged.
 CATALOGS = [
-    "BGS_BRIGHT_N_clustering.dat.fits",
-    "BGS_BRIGHT_S_clustering.dat.fits",
-    "BGS_BRIGHT-21.5_N_clustering.dat.fits",
-    "BGS_BRIGHT-21.5_S_clustering.dat.fits",
-    "LRG_N_clustering.dat.fits",
-    "LRG_S_clustering.dat.fits",
-    "ELG_LOPnotqso_N_clustering.dat.fits",
-    "ELG_LOPnotqso_S_clustering.dat.fits",
-    "QSO_N_clustering.dat.fits",
-    "QSO_S_clustering.dat.fits",
+    "BGS_BRIGHT_full.dat.fits",
+    "LRG_full.dat.fits",
+    "ELG_LOPnotqso_full.dat.fits",
+    "QSO_full.dat.fits",
 ]
 
 # Max concurrent downloads — be respectful to the DESI server

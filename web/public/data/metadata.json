@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "n_points": 1397612,
+  "n_points": 1581130,
   "tracers": {
     "0": {
       "name": "BGS",
@@ -37,16 +37,16 @@
   },
   "bounds": {
     "x": [
-      -6888.23974609375,
-      6580.48828125
+      -7395.478515625,
+      7294.87548828125
     ],
     "y": [
-      -6742.703125,
-      142.42105102539062
+      -7317.5205078125,
+      293.0632629394531
     ],
     "z": [
-      -1357.2869873046875,
-      6271.5107421875
+      -1367.5216064453125,
+      6612.96142578125
     ]
   },
   "cosmology": {
@@ -55,7 +55,7 @@
     "model": "FlatLambdaCDM"
   },
   "data_release": "DESI DR1 guadalupe/v1.0",
-  "sampling": "none \u2014 full catalog",
+  "sampling": "DESI DR1 guadalupe `full` sample \u2014 complete observed catalog (all galaxies, not the cosmology clustering subset)",
   "color_encoding": {
     "field": "color_byte (byte offset 13 per record)",
     "description": "g-r colour from dereddened DESI fluxes (BGS only; 128=neutral for other tracers)",
