@@ -160,7 +160,7 @@ def export_web() -> None:
     write_binary_fast(
         x[perm], y[perm], z_cart[perm], z_red[perm],
         tracer[perm], color_byte[perm],
-        WEB_DATA_DIR / "galaxies.bin",
+        WEB_DATA_DIR / f"galaxies.v{VERSION}.bin",
     )
 
     metadata = {

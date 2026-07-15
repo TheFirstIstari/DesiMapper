@@ -93,7 +93,7 @@ function parseBinary(buffer: ArrayBuffer): GalaxyData {
   if (version !== BINARY_VERSION) {
     throw new Error(
       `Unsupported binary version: ${version} (expected ${BINARY_VERSION}). ` +
-      `Re-run 'mise run export-web' to regenerate galaxies.bin.`
+      `Re-run 'mise run export-web' to regenerate galaxies.v3.bin.`
     );
   }
 

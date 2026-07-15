@@ -74,29 +74,18 @@ The web viewer is hosted as a **Render Static Site** — zero servers, zero main
 git push origin main
 ```
 
-> **Note:** `web/public/data/galaxies.bin` (~21 MB) is committed to the repo so
-> Render can serve it without a pipeline run. If you regenerate the binary via
-> `mise run export-web`, commit the updated file and push.
+> **Note:** `web/public/data/galaxies.v3.bin` (~22 MB) is committed to the repo so
+> Render can serve it without a pipeline run. The filename is versioned (`galaxies.vN.bin`)
+> because the binary format changes between versions; renaming (not overwriting) keeps the
+> 1-year immutable CDN cache correct. If you regenerate via `mise run export-web`, it writes
+> a new `galaxies.vN.bin` — commit that (and remove the prior version) and push.
 
 #### Legacy self-hosted infrastructure (deprecated)
 
 <details>
-<summary>Azure VM + Tailscale + Fedora MiniPC setup</summary>
+<summary>Legacy self-hosted infrastructure (deprecated)</summary>
 
-The web viewer was previously hosted on a Fedora MiniPC behind a residential ISP (no port-forward).
-An Azure VM acted as the public-facing reverse proxy, forwarding traffic via Tailscale:
-
-```
-Browser → Azure VM (public IP) → Tailscale mesh → Fedora MiniPC (100.82.166.71)
-```
-
-```bash
-# Set your Azure VM public IP first:
-export AZURE_HOST="root@<YOUR_AZURE_VM_IP>"
-
-mise run deploy
-# Builds → pushes via rsync through Azure jump host → configures nginx on both machines
-```
+The web viewer was previously hosted on a Fedora MiniPC behind a residential ISP, with an Azure VM as a public-facing reverse proxy over Tailscale. This is deprecated — the viewer now ships to Render as a static site (see `render.yaml`).
 
 </details>
 
@@ -117,7 +106,7 @@ bash scripts/batch_render.sh
 bash scripts/encode_video.sh
 ```
 
-**Windows (NVIDIA GPU — OptiX/NVENC):**
+**Windows (NVIDIA GPU — OptiX/NVENC):** install Blender 5.1 + pyarrow into Blender's Python, then:
 ```bat
 REM Quick test at 1080p (run from repo root: cd C:\DesiMapper)
 "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python animation\render.py -- ^
@@ -125,13 +114,9 @@ REM Quick test at 1080p (run from repo root: cd C:\DesiMapper)
   --resolution 1920x1080 --samples 32 --max-points 200000
 
 REM Full 8K production render (batched, manages disk space automatically)
-scripts\batch_render_windows.bat
-
-REM Encode frames → YouTube-ready H.265 MP4 (NVENC GPU encoding)
-scripts\encode_video_windows.bat
+RESOLUTION=7680x4320 bash scripts/batch_render.sh
 ```
-
-See [WINDOWS_RENDER.md](WINDOWS_RENDER.md) for full Windows setup instructions.
+Windows rendering uses the same `batch_render.sh` via WSL2/Git Bash. Install pyarrow into Blender's bundled Python (`Blender 5.1/python/bin/python3.13 -m pip install pyarrow`).
 
 ---
 
@@ -158,9 +143,8 @@ DesiMapper/
 │   └── vite.config.ts
 ├── scripts/
 │   ├── run_pipeline.sh         # Full pipeline runner
-│   ├── deploy.sh               # Deploy to Fedora MiniPC
-│   ├── encode_video.sh         # ffmpeg MP4 encoder
-│   └── nginx-desimapper.conf   # Production nginx config
+│   ├── batch_render.sh         # Batched Blender render (8K default, parametrized)
+│   └── encode_video.sh         # ffmpeg MP4 encoder
 ├── .mise.toml          # Environment + task definitions
 ├── Spec.md             # Full project specification
 └── README.md
@@ -183,12 +167,12 @@ DESI DR1 FITS catalogs
   pipeline/reduce.py       ─────────────────┐
        │                                    │
        ▼                                    ▼
-  animation/render.py              web/public/data/galaxies.bin
+  animation/render.py              web/public/data/galaxies.v3.bin
   (Blender, ~500k pts)             (~500k pts, custom binary)
        │                                    │
        ▼                                    ▼
   renders/*.mp4                    web/src/main.ts (Three.js)
-  (YouTube)                        (Nginx → Fedora MiniPC)
+  (YouTube)                        (hosted on Render)
 ```
 
 ### Coordinate System
@@ -239,13 +223,9 @@ Total download: ~150 MB (vs 279 TB full release).
 | MacBook (macOS) | Development, pipeline | Metal GPU → Blender Cycles (backup renderer) |
 | Windows PC (7800X3D + RTX 3090) | **Primary animation renderer** | OptiX → Blender Cycles, NVENC encoding |
 | Raspberry Pi (`100.68.179.53`) | FITS archive + pipeline storage | 1 TB, `/projects` |
-| Fedora MiniPC (`100.82.166.71`) | Static web server (nginx) | AMD 7940HS, Tailscale only |
-| Azure VM | Public reverse proxy (nginx) | Forwards HTTP → MiniPC via Tailscale |
+| Render | **Web viewer host** | Static site, custom domain `desi.tweak.wiki` |
 
-**Network topology** (ISP blocks port-forwarding → Azure bridges the gap):
-```
-Browser → Azure VM :80 ──[Tailscale]──► Fedora MiniPC :80
-```
+The web viewer is deployed to Render as a static site (see `render.yaml`). Previous self-hosted infrastructure (Fedora MiniPC + Azure reverse proxy) is deprecated.
 
 ---
 
