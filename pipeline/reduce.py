@@ -1,9 +1,15 @@
 """
-reduce.py — Downsample galaxy catalog for web viewer export.
+reduce.py — Export the full galaxy catalog for the web viewer.
 
-Reads the combined Parquet catalog, applies stratified random sampling
-per tracer type to produce a reduced dataset that loads fast in the browser.
-Outputs a compact binary file and a JSON metadata file.
+No downsampling is applied.  Every galaxy that passed quality cuts in
+process.py is written to the binary.  At 16 bytes/point the ~1.4M-row
+combined catalog produces a ~22 MB file.
+
+BGS galaxies carry a per-galaxy g-r colour byte derived from dereddened
+DESI fluxes.  The byte encodes g-r on a 0–255 scale covering [-0.5, 2.5]
+mag (blue star-forming → red passive).  Non-BGS tracers get 128 (neutral).
+
+Output: custom 16-byte-per-point binary (v2) + metadata.json for the Three.js viewer.
 """
 
 import json
@@ -19,120 +25,87 @@ from rich.table import Table
 console = Console()
 
 PROCESSED_DIR = Path(os.environ.get("DESI_PROCESSED_DIR", "data/processed"))
-WEB_DATA_DIR = Path("web/public/data")
+WEB_DATA_DIR  = Path("web/public/data")
 
-# Target point count per tracer for web viewer (keep total ~500k)
-TARGET_PER_TRACER = {
-    0: 100_000,  # BGS
-    1: 150_000,  # LRG
-    2: 150_000,  # ELG
-    3: 100_000,  # QSO
-}
+MAGIC   = 0x44455349  # "DESI"
+VERSION = 3
 
-MAGIC = 0x44455349  # "DESI"
-VERSION = 1
-
-
-def sample_tracer(table, tracer_id: int, n_target: int) -> tuple:
-    """Weighted random sample from a tracer's rows."""
-    mask = np.array(table["tracer"]) == tracer_id
-    idx = np.where(mask)[0]
-
-    if len(idx) == 0:
-        return np.array([]), np.array([]), np.array([]), np.array([]), np.array([])
-
-    n_sample = min(n_target, len(idx))
-
-    # Use weights for stratified sampling
-    weights = np.array(table["weight"])[idx].astype(np.float64)
-    weights = np.clip(weights, 0, None)
-    total_w = weights.sum()
-    if total_w > 0:
-        probs = weights / total_w
-    else:
-        probs = np.ones(len(idx)) / len(idx)
-
-    chosen = np.random.choice(idx, size=n_sample, replace=False, p=probs)
-
-    x = np.array(table["x"])[chosen].astype(np.float32)
-    y = np.array(table["y"])[chosen].astype(np.float32)
-    z_cart = np.array(table["z_cart"])[chosen].astype(np.float32)
-    z_red = np.array(table["z"])[chosen].astype(np.float32)
-    tracer = np.full(n_sample, tracer_id, dtype=np.uint8)
-
-    return x, y, z_cart, z_red, tracer
+# g-r colour byte encoding: maps the physical range [GR_MIN, GR_MAX] mag
+# linearly onto [0, 255].  Values outside the range are clamped.
+# 0   = very blue (star-forming)   g-r ≈ -0.5
+# 128 = neutral / non-BGS tracer   g-r ≈  1.0
+# 255 = very red (passive)         g-r ≈  2.5
+GR_MIN = -0.5
+GR_MAX =  2.5
 
 
-def write_binary(x, y, z_cart, z_red, tracer, out_path: Path) -> None:
+def _gr_to_byte(flux_g: np.ndarray, flux_r: np.ndarray) -> np.ndarray:
+    """Compute g-r colour and encode to uint8.
+
+    flux_g, flux_r: dereddened fluxes in nanomaggies (may contain NaN for
+    non-BGS rows, in which case 128 (neutral) is returned).
     """
-    Write compact binary format for fast ArrayBuffer loading in Three.js.
+    # AB magnitude: m = 22.5 - 2.5*log10(flux)  [flux in nanomaggies]
+    safe_g = np.clip(flux_g, 1e-5, None)
+    safe_r = np.clip(flux_r, 1e-5, None)
+    g_mag = 22.5 - 2.5 * np.log10(safe_g)
+    r_mag = 22.5 - 2.5 * np.log10(safe_r)
+    gr = g_mag - r_mag
 
-    Header (16 bytes):
-      uint32: magic
-      uint32: version
-      uint32: n_points
-      uint32: flags
+    # Replace NaN / non-finite with neutral
+    bad = ~np.isfinite(gr) | np.isnan(flux_g) | np.isnan(flux_r)
+    gr[bad] = (GR_MIN + GR_MAX) / 2.0  # → byte 128
 
-    Body per point (16 bytes):
-      float32: x
-      float32: y
-      float32: z_cart
-      uint8: tracer_type
-      uint8: reserved
-      uint16: z_encoded (z * 10000, clamped to uint16 max)
+    # Linear map [GR_MIN, GR_MAX] → [0, 255]
+    t = (gr - GR_MIN) / (GR_MAX - GR_MIN)
+    return np.clip(np.round(t * 255), 0, 255).astype(np.uint8)
+
+
+# ─── Binary writer ────────────────────────────────────────────────────────────
+
+def write_binary_fast(x, y, z_cart, z_red, tracer, color_byte, out_path: Path) -> None:
+    """Vectorised write — header + struct-of-arrays, 4-byte field alignment.
+
+    Binary format v3 — 16 bytes per point (little-endian), laid out as separate
+    field blocks so the viewer can wrap each field with a zero-copy typed-array
+    view (no per-point parse loop). No intra-block padding is needed: f32 blocks
+    are 4-aligned by construction, u8 needs only 1-align, and the u16 block lands
+    at 16+14n (always even), so every view is correctly aligned for ANY n:
+      Header (16): magic, version, n_points, flags
+      x[]          float32  [16,        4n]
+      y[]          float32  [16+4n,     4n]
+      z_cart[]     float32  [16+8n,     4n]
+      tracer[]     uint8    [16+12n,    n]
+      color_byte[] uint8    [16+13n,    n]
+      z_encoded[]  uint16   [16+14n,    2n]
+    Total on wire: 16 + 16n bytes.
     """
-    n = len(x)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(out_path, "wb") as f:
-        # Header
-        f.write(struct.pack("<IIII", MAGIC, VERSION, n, 0))
-
-        # Body — pack each record
-        z_encoded = np.clip(z_red * 10000, 0, 65535).astype(np.uint16)
-
-        for i in range(n):
-            f.write(struct.pack("<fffBBH", x[i], y[i], z_cart[i], tracer[i], 0, z_encoded[i]))
-
-    console.print(f"  Wrote {n:,} points → {out_path} ({out_path.stat().st_size / 1e6:.1f} MB)")
-
-
-def write_binary_fast(x, y, z_cart, z_red, tracer, out_path: Path) -> None:
-    """Vectorised binary write — much faster than per-row loop."""
     n = len(x)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     z_encoded = np.clip(z_red * 10000, 0, 65535).astype(np.uint16)
-    reserved = np.zeros(n, dtype=np.uint8)
 
-    # Interleave fields into structured array
-    dtype = np.dtype([
-        ("x", "<f4"),
-        ("y", "<f4"),
-        ("z_cart", "<f4"),
-        ("tracer", "u1"),
-        ("reserved", "u1"),
-        ("z_encoded", "<u2"),
-    ])
-    records = np.empty(n, dtype=dtype)
-    records["x"] = x
-    records["y"] = y
-    records["z_cart"] = z_cart
-    records["tracer"] = tracer
-    records["reserved"] = reserved
-    records["z_encoded"] = z_encoded
+    body = (
+        x.astype("<f4").tobytes()
+        + y.astype("<f4").tobytes()
+        + z_cart.astype("<f4").tobytes()
+        + tracer.astype("<u1").tobytes()
+        + color_byte.astype("<u1").tobytes()
+        + z_encoded.astype("<u2").tobytes()
+    )
 
     with open(out_path, "wb") as f:
-        # Header
         f.write(struct.pack("<IIII", MAGIC, VERSION, n, 0))
-        f.write(records.tobytes())
+        f.write(body)
 
     size_mb = out_path.stat().st_size / 1e6
     console.print(f"  Wrote {n:,} points → {out_path.name} ({size_mb:.1f} MB)")
 
 
+# ─── Main export ─────────────────────────────────────────────────────────────
+
 def export_web() -> None:
-    console.rule("[bold cyan]DESI DR1 — Web Data Export")
+    console.rule("[bold cyan]DESI DR1 — Full Catalog Web Export")
 
     combined_path = PROCESSED_DIR / "all_galaxies.parquet"
     if not combined_path.exists():
@@ -142,75 +115,86 @@ def export_web() -> None:
 
     console.print(f"Loading {combined_path}…")
     table = pq.read_table(combined_path)
-    console.print(f"  Total galaxies: {len(table):,}")
+    n_total = len(table)
+    console.print(f"  Total galaxies: {n_total:,}")
 
-    np.random.seed(42)  # Reproducible sampling
+    # Extract all columns as numpy arrays in one pass
+    x      = np.array(table["x"],      dtype=np.float32)
+    y      = np.array(table["y"],      dtype=np.float32)
+    z_cart = np.array(table["z_cart"], dtype=np.float32)
+    z_red  = np.array(table["z"],      dtype=np.float32)
+    tracer = np.array(table["tracer"], dtype=np.uint8)
+    flux_g = np.array(table["flux_g"], dtype=np.float32)
+    flux_r = np.array(table["flux_r"], dtype=np.float32)
 
-    all_x, all_y, all_z_cart, all_z_red, all_tracer = [], [], [], [], []
-    stats_table = Table(title="Web Export Sample")
-    stats_table.add_column("Tracer", style="cyan")
-    stats_table.add_column("Available", justify="right")
-    stats_table.add_column("Sampled", justify="right", style="green")
+    color_byte = _gr_to_byte(flux_g, flux_r)
 
+    # Per-tracer stats
     tracer_names = {0: "BGS", 1: "LRG", 2: "ELG", 3: "QSO"}
+    stats = Table(title="Full Catalog Export")
+    stats.add_column("Tracer",  style="cyan")
+    stats.add_column("Count",   justify="right", style="green")
+    stats.add_column("z range", justify="right")
+    stats.add_column("g-r range", justify="right", style="dim")
 
-    for tracer_id, n_target in TARGET_PER_TRACER.items():
-        x, y, z_c, z_r, t = sample_tracer(table, tracer_id, n_target)
-        if len(x) == 0:
+    for tid, name in tracer_names.items():
+        mask = tracer == tid
+        if not mask.any():
             continue
+        z_t  = z_red[mask]
+        cb_t = color_byte[mask]
+        if tid == 0:
+            gr_lo = GR_MIN + (cb_t.min() / 255.0) * (GR_MAX - GR_MIN)
+            gr_hi = GR_MIN + (cb_t.max() / 255.0) * (GR_MAX - GR_MIN)
+            gr_str = f"{gr_lo:.2f}–{gr_hi:.2f}"
+        else:
+            gr_str = "N/A"
+        stats.add_row(name, f"{mask.sum():,}", f"{z_t.min():.3f}–{z_t.max():.3f}", gr_str)
 
-        n_avail = int((np.array(table["tracer"]) == tracer_id).sum())
-        stats_table.add_row(
-            tracer_names[tracer_id],
-            f"{n_avail:,}",
-            f"{len(x):,}",
-        )
+    console.print(stats)
 
-        all_x.append(x)
-        all_y.append(y)
-        all_z_cart.append(z_c)
-        all_z_red.append(z_r)
-        all_tracer.append(t)
+    # Shuffle so additive-blending draw order has no systematic depth bias
+    rng = np.random.default_rng(42)
+    perm = rng.permutation(n_total)
 
-    x_all = np.concatenate(all_x)
-    y_all = np.concatenate(all_y)
-    z_cart_all = np.concatenate(all_z_cart)
-    z_red_all = np.concatenate(all_z_red)
-    tracer_all = np.concatenate(all_tracer)
-
-    console.print(stats_table)
-
-    # Shuffle so point cloud doesn't render back-to-front sorted
-    perm = np.random.permutation(len(x_all))
     write_binary_fast(
-        x_all[perm], y_all[perm], z_cart_all[perm], z_red_all[perm], tracer_all[perm],
+        x[perm], y[perm], z_cart[perm], z_red[perm],
+        tracer[perm], color_byte[perm],
         WEB_DATA_DIR / "galaxies.bin",
     )
 
-    # Write metadata JSON for the web app
     metadata = {
-        "version": VERSION,
-        "n_points": int(len(x_all)),
+        "version":    VERSION,
+        "n_points":   n_total,
         "tracers": {
-            "0": {"name": "BGS", "color": "#FF8C00", "z_range": [0.01, 0.6]},
-            "1": {"name": "LRG", "color": "#CC2200", "z_range": [0.4, 1.1]},
-            "2": {"name": "ELG", "color": "#00CED1", "z_range": [0.8, 1.6]},
-            "3": {"name": "QSO", "color": "#8888FF", "z_range": [0.8, 2.1]},
+            "0": {"name": "BGS", "color": "#FF8C00", "z_range": [0.01,  0.6]},
+            "1": {"name": "LRG", "color": "#CC2200", "z_range": [0.4,   1.1]},
+            "2": {"name": "ELG", "color": "#00CED1", "z_range": [0.8,   1.6]},
+            "3": {"name": "QSO", "color": "#8888FF", "z_range": [0.8,   2.1]},
         },
         "bounds": {
-            "x": [float(x_all.min()), float(x_all.max())],
-            "y": [float(y_all.min()), float(y_all.max())],
-            "z": [float(z_cart_all.min()), float(z_cart_all.max())],
+            "x": [float(x.min()), float(x.max())],
+            "y": [float(y.min()), float(y.max())],
+            "z": [float(z_cart.min()), float(z_cart.max())],
         },
-        "cosmology": {"H0": 67.4, "Om0": 0.315, "model": "FlatLambdaCDM"},
+        "cosmology":    {"H0": 67.4, "Om0": 0.315, "model": "FlatLambdaCDM"},
         "data_release": "DESI DR1 guadalupe/v1.0",
+        "sampling":     "none — full catalog",
+        "color_encoding": {
+            "field": "color_byte (byte offset 13 per record)",
+            "description": "g-r colour from dereddened DESI fluxes (BGS only; 128=neutral for other tracers)",
+            "gr_min": GR_MIN,
+            "gr_max": GR_MAX,
+            "byte_0": "blue/star-forming (g-r=-0.5)",
+            "byte_128": "neutral",
+            "byte_255": "red/passive (g-r=2.5)",
+        },
     }
 
     meta_path = WEB_DATA_DIR / "metadata.json"
     meta_path.write_text(json.dumps(metadata, indent=2))
     console.print(f"  Wrote metadata → {meta_path}")
-
-    console.print(f"\n[bold green]✓ Web export complete: {len(x_all):,} galaxies[/]")
+    console.print(f"\n[bold green]✓ Web export complete: {n_total:,} galaxies[/]")
 
 
 if __name__ == "__main__":
