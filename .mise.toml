@@ -16,16 +16,12 @@ run = "pip install -r pipeline/requirements.txt && cd web && npm install"
 description = "Download DESI clustering catalogs"
 run = "python pipeline/fetch.py"
 
-[tasks.fetch-randoms]
-description = "Download bounded random (density) catalogs"
-run = "python pipeline/fetch.py randoms"
-
 [tasks.process]
-description = "Process FITS → Parquet + binary (galaxies + randoms)"
+description = "Process FITS → Parquet + binary"
 run = "python pipeline/process.py"
 
 [tasks.export-web]
-description = "Export reduced dataset for web viewer (v4 binary)"
+description = "Export reduced dataset for web viewer"
 run = "python pipeline/reduce.py"
 
 [tasks.pipeline]
@@ -41,8 +37,8 @@ description = "Build web viewer for production"
 run = "cd web && npm run build"
 
 [tasks.deploy]
-description = "Deploy web viewer to Render (static site)"
-run = "cd web && npm run build"
+description = "Deploy web viewer to Fedora MiniPC"
+run = "bash scripts/deploy.sh"
 
 [tasks.animate]
 description = "Render the 3D animation (requires Blender)"

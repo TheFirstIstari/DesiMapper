@@ -1,16 +1,15 @@
 /**
  * DataLoader.ts — Streaming binary loader for DESI galaxy data.
  *
- * Binary format v4 (little-endian), struct-of-arrays with 4-byte field
+ * Binary format v3 (little-endian), struct-of-arrays with 4-byte field
  * alignment — each field block can be wrapped in a typed array ZERO-COPY:
  *   Header (16): magic, version, n_points, flags
- *   x[]          float32  [16,        4n]
- *   y[]          float32  [16+4n,     4n]
- *   z_cart[]     float32  [16+8n,     4n]
- *   tracer[]     uint8    [16+12n,    n]
- *   color_byte[] uint8    [16+13n,    n]
- *   z_encoded[]  uint16   [16+14n,    2n]
- *   kind[]       uint8    [16+16n,    n]   (0=galaxy, 1=random)
+ *   x[]          float32  [offset 16,          stride 4]
+ *   y[]          float32  [offset 16 + 4n,     stride 4]
+ *   z_cart[]     float32  [offset 16 + 8n,     stride 4]
+ *   tracer[]     uint8    [offset 16 + 12n,    padded to 4n]
+ *   color_byte[] uint8    [offset 16 + 12n + pad, padded to 4n]
+ *   z_encoded[]  uint16   [offset ... , padded to 4n]
  * Each field array is created with a subarray view over the original buffer
  * (no allocation, no per-point loop).
  */
@@ -23,8 +22,6 @@ export interface GalaxyData {
   /** g-r colour byte: 0=blue/star-forming, 255=red/passive, 128=neutral (non-BGS) */
   colorByte: Uint8Array;
   redshift: Float32Array;
-  /** 0 = observed galaxy, 1 = random (density-field) point */
-  kind: Uint8Array;
   nPoints: number;
 }
 
@@ -37,8 +34,8 @@ export interface Metadata {
   data_release: string;
 }
 
-const MAGIC = 0x44452349;
-const BINARY_VERSION = 4;
+const MAGIC = 0x44455349;
+const BINARY_VERSION = 3;
 const HEADER_BYTES = 16;
 
 type ProgressCallback = (loaded: number, total: number) => void;
@@ -120,8 +117,5 @@ function parseBinary(buffer: ArrayBuffer): GalaxyData {
   const redshift = new Float32Array(nPoints);
   for (let i = 0; i < nPoints; i++) redshift[i] = zEnc[i] / 10000;
 
-  const kindStart = u16Start + nPoints * 2;
-  const kind = new Uint8Array(buffer, kindStart, nPoints);
-
-  return { x, y, z, tracer, colorByte, redshift, kind, nPoints };
+  return { x, y, z, tracer, colorByte, redshift, nPoints };
 }

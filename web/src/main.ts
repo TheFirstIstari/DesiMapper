@@ -129,15 +129,6 @@ document.querySelectorAll<HTMLElement>(".legend-item").forEach((el) => {
   });
 });
 
-// Randoms density-layer toggle
-const randomToggle = document.getElementById("random-toggle");
-let randomsOn = true;
-randomToggle?.addEventListener("click", () => {
-  randomsOn = !randomsOn;
-  galaxyRenderer.setShowRandoms(randomsOn);
-  randomToggle.classList.toggle("hidden", !randomsOn);
-});
-
 // ─── Resize Handling ────────────────────────────────────────────────────────
 
 window.addEventListener("resize", () => {

@@ -7,7 +7,6 @@ Uses HTTP range requests + async I/O to maximise throughput.
 
 import asyncio
 import os
-import sys
 from pathlib import Path
 
 import httpx
@@ -43,19 +42,6 @@ CATALOGS = [
     "ELG_LOPnotqso_S_clustering.dat.fits",
     "QSO_N_clustering.dat.fits",
     "QSO_S_clustering.dat.fits",
-]
-
-# Randoms are ~200 MB each and ~100× the galaxy count. We fetch only a bounded
-# subset (one split per tracer/footprint) for the density layer — never all 180.
-RANDOM_CATALOGS = [
-    "BGS_BRIGHT_N_0_clustering.ran.fits",
-    "BGS_BRIGHT_S_0_clustering.ran.fits",
-    "LRG_N_0_clustering.ran.fits",
-    "LRG_S_0_clustering.ran.fits",
-    "ELG_LOPnotqso_N_0_clustering.ran.fits",
-    "ELG_LOPnotqso_S_0_clustering.ran.fits",
-    "QSO_N_0_clustering.ran.fits",
-    "QSO_S_0_clustering.ran.fits",
 ]
 
 # Max concurrent downloads — be respectful to the DESI server
@@ -97,11 +83,9 @@ async def download_file(
         raise
 
 
-async def fetch_all(catalogs: list[str] | None = None) -> None:
+async def fetch_all() -> None:
     console.rule("[bold cyan]DESI DR1 — Catalog Download")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    catalogs = catalogs or CATALOGS
 
     progress = Progress(
         TextColumn("[bold blue]{task.description}", justify="right"),
@@ -124,7 +108,7 @@ async def fetch_all(catalogs: list[str] | None = None) -> None:
     with progress:
         async with httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=True) as client:
             tasks = []
-            for catalog in catalogs:
+            for catalog in CATALOGS:
                 url = f"{BASE_URL}/{catalog}"
                 dest = DATA_DIR / catalog
                 task_id = progress.add_task(f"[cyan]{catalog}", total=None)
@@ -139,19 +123,12 @@ async def fetch_all(catalogs: list[str] | None = None) -> None:
             console.print(f"  [red]{e}[/]")
         raise SystemExit(1)
 
-    console.print(f"\n[bold green]✓ All {len(catalogs)} catalogs downloaded to {DATA_DIR}/[/]")
+    console.print(f"\n[bold green]✓ All {len(CATALOGS)} catalogs downloaded to {DATA_DIR}/[/]")
 
 
 def main():
     asyncio.run(fetch_all())
 
 
-def main_randoms():
-    asyncio.run(fetch_all(RANDOM_CATALOGS))
-
-
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "randoms":
-        main_randoms()
-    else:
-        main()
+    main()
