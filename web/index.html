@@ -20,38 +20,49 @@
       position: fixed;
       inset: 0;
       z-index: 0;
+      cursor: grab;
     }
+    #canvas-container:active { cursor: grabbing; }
 
-    #ui {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 10;
-      pointer-events: none;
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
+    /* ── Header ─────────────────────────────────────────────────────────── */
 
     #header {
-      padding: 1.25rem 1.5rem 0.75rem;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
-      pointer-events: auto;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 10;
+      padding: 1.1rem 1.4rem 1.8rem;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, transparent 100%);
+      pointer-events: none;
     }
 
     #header h1 {
-      font-size: clamp(1.1rem, 2.5vw, 1.6rem);
+      font-size: clamp(0.95rem, 2vw, 1.4rem);
       font-weight: 700;
-      letter-spacing: 0.05em;
-      color: #e0e8ff;
+      letter-spacing: 0.07em;
+      color: #d4deff;
+      text-transform: uppercase;
     }
 
-    #header p {
-      font-size: 0.78rem;
-      color: #8899cc;
-      margin-top: 0.2rem;
+    #header-meta {
+      display: flex;
+      align-items: baseline;
+      gap: 0.9rem;
+      margin-top: 0.3rem;
+      flex-wrap: wrap;
     }
+
+    #header-meta span {
+      font-size: 0.72rem;
+      color: #556;
+      letter-spacing: 0.03em;
+    }
+
+    #galaxy-count {
+      color: #6677aa;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Sidebar legend ──────────────────────────────────────────────────── */
 
     #sidebar {
       position: fixed;
@@ -61,85 +72,135 @@
       z-index: 10;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      pointer-events: auto;
+      gap: 0.35rem;
+    }
+
+    #sidebar-title {
+      font-size: 0.55rem;
+      color: #334;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      padding: 0 0.2rem 0.15rem;
     }
 
     .legend-item {
-      display: flex;
+      display: grid;
+      grid-template-columns: 9px 1fr;
       align-items: center;
-      gap: 0.5rem;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 6px;
-      padding: 0.4rem 0.75rem;
+      gap: 0.55rem;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 8px;
+      padding: 0.45rem 0.8rem 0.45rem 0.65rem;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+      transition: border-color 0.16s, background 0.16s, opacity 0.16s;
       user-select: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      min-width: 148px;
     }
 
     .legend-item:hover {
-      background: rgba(255,255,255,0.08);
-      border-color: rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(255,255,255,0.2);
     }
 
-    .legend-item.hidden {
-      opacity: 0.4;
-    }
+    .legend-item.hidden { opacity: 0.3; }
 
     .legend-dot {
-      width: 10px;
-      height: 10px;
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
       flex-shrink: 0;
+      box-shadow: 0 0 7px currentColor;
     }
+
+    /* BGS uses a gradient bar instead of a solid dot */
+    .legend-dot-gradient {
+      width: 28px;
+      height: 9px;
+      border-radius: 5px;
+      flex-shrink: 0;
+      background: linear-gradient(to right, #4587FF, #FF3800);
+      box-shadow: 0 0 6px rgba(100,140,255,0.5);
+    }
+
+    .legend-text {}
 
     .legend-label {
-      font-size: 0.8rem;
-      font-weight: 600;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #ccd4f0;
+      line-height: 1;
     }
 
-    .legend-range {
-      font-size: 0.65rem;
-      color: #aab;
+    .legend-name {
+      font-size: 0.6rem;
+      color: #445;
+      margin-top: 0.1rem;
+      line-height: 1;
     }
+
+    .legend-sub {
+      font-size: 0.58rem;
+      color: #334;
+      margin-top: 0.12rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Controls bar ────────────────────────────────────────────────────── */
 
     #controls {
       position: fixed;
-      bottom: 1.5rem;
+      bottom: 1.4rem;
       left: 50%;
       transform: translateX(-50%);
       z-index: 10;
-      background: rgba(0,0,0,0.7);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 12px;
-      padding: 0.75rem 1.25rem;
+      background: rgba(3,5,16,0.78);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 14px;
+      padding: 0.8rem 1.4rem;
       display: flex;
       align-items: center;
-      gap: 1.25rem;
-      pointer-events: auto;
-      backdrop-filter: blur(8px);
+      gap: 1.5rem;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      white-space: nowrap;
     }
 
     .control-group {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
-      align-items: center;
+      gap: 0.28rem;
+      min-width: 128px;
+    }
+
+    .control-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      width: 100%;
     }
 
     .control-label {
-      font-size: 0.65rem;
-      color: #8899cc;
+      font-size: 0.58rem;
+      color: #445;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
+    }
+
+    .control-value {
+      font-size: 0.63rem;
+      color: #7788bb;
+      font-variant-numeric: tabular-nums;
     }
 
     input[type=range] {
       -webkit-appearance: none;
-      width: 140px;
-      height: 4px;
-      background: rgba(255,255,255,0.2);
+      width: 128px;
+      height: 3px;
+      background: rgba(255,255,255,0.1);
       border-radius: 2px;
       outline: none;
       cursor: pointer;
@@ -147,127 +208,230 @@
 
     input[type=range]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      background: #6699ff;
+      background: #4466ee;
       cursor: pointer;
+      box-shadow: 0 0 5px #2244cc66;
+      transition: transform 0.1s;
     }
+
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+
+    .divider {
+      width: 1px;
+      height: 2.2rem;
+      background: rgba(255,255,255,0.07);
+      flex-shrink: 0;
+    }
+
+    /* ── Loading screen ──────────────────────────────────────────────────── */
 
     #loading {
       position: fixed;
       inset: 0;
       z-index: 100;
-      background: #000;
+      background: #000008;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       gap: 1rem;
-      transition: opacity 0.5s;
+      transition: opacity 0.6s;
     }
 
-    #loading h2 {
-      font-size: 1.4rem;
+    #loading-title {
+      font-size: clamp(0.95rem, 2.8vw, 1.4rem);
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      color: #6677bb;
+      text-transform: uppercase;
+    }
+
+    #loading-subtitle {
+      font-size: 0.68rem;
+      color: #3a4a60;
       letter-spacing: 0.1em;
-      color: #8899cc;
     }
 
     #loading-bar-outer {
-      width: 280px;
-      height: 3px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 2px;
+      width: 240px;
+      height: 2px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 1px;
       overflow: hidden;
     }
 
     #loading-bar {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #3355cc, #66aaff);
-      border-radius: 2px;
-      transition: width 0.1s;
+      background: linear-gradient(90deg, #1f3daa, #4d6eff);
+      border-radius: 1px;
+      transition: width 0.12s ease-out;
     }
 
     #loading-text {
-      font-size: 0.8rem;
-      color: #556;
+      font-size: 0.68rem;
+      color: #364458;
+      letter-spacing: 0.04em;
     }
+
+    /* ── Stats ───────────────────────────────────────────────────────────── */
 
     #stats {
       position: fixed;
-      bottom: 5.5rem;
-      left: 1rem;
-      font-size: 0.7rem;
-      color: #445;
+      bottom: 5.2rem;
+      left: 1.1rem;
+      font-size: 0.62rem;
+      color: #2d3a4a;
       z-index: 5;
-      line-height: 1.6;
+      line-height: 1.8;
+      font-variant-numeric: tabular-nums;
+      pointer-events: none;
+    }
+
+    /* ── Hint ────────────────────────────────────────────────────────────── */
+
+    #hint {
+      position: fixed;
+      bottom: 1.6rem;
+      right: 1.1rem;
+      font-size: 0.58rem;
+      color: #2d3a4a;
+      z-index: 5;
+      text-align: right;
+      line-height: 2;
+      pointer-events: none;
+    }
+
+    /* ── Mobile ──────────────────────────────────────────────────────────── */
+
+    @media (max-width: 620px) {
+      #controls { gap: 0.9rem; padding: 0.65rem 0.9rem; }
+      .control-group { min-width: 95px; }
+      input[type=range] { width: 95px; }
+      #hint { display: none; }
+      #sidebar { right: 0.4rem; }
+      .legend-item { min-width: 120px; padding: 0.4rem 0.6rem 0.4rem 0.55rem; }
+      .legend-name { display: none; }
     }
   </style>
 </head>
 <body>
+
+  <!-- Loading screen -->
   <div id="loading">
-    <h2>DESI DR1 GALAXY MAP</h2>
+    <div id="loading-title">DESI DR1 Galaxy Map</div>
+    <div id="loading-subtitle">Dark Energy Spectroscopic Instrument · Data Release 1</div>
     <div id="loading-bar-outer"><div id="loading-bar"></div></div>
     <div id="loading-text">Initialising…</div>
   </div>
 
+  <!-- WebGL canvas -->
   <div id="canvas-container"></div>
 
-  <div id="ui">
-    <div id="header">
-      <h1>DESI DR1 — Universe in 3D</h1>
-      <p>~500,000 galaxies · Comoving coordinates · Drag to rotate · Scroll to zoom</p>
+  <!-- Header -->
+  <div id="header">
+    <h1>DESI DR1 — Universe in 3D</h1>
+    <div id="header-meta">
+      <span id="galaxy-count">loading…</span>
+      <span>Comoving coordinates · Mpc</span>
+      <span>Flat ΛCDM · H₀ = 67.4 km/s/Mpc</span>
     </div>
   </div>
 
+  <!-- Tracer legend / toggle -->
   <div id="sidebar">
-    <div class="legend-item" data-tracer="0">
-      <div class="legend-dot" style="background:#FF8C00"></div>
-      <div>
+    <div id="sidebar-title">Galaxy tracers</div>
+
+    <div class="legend-item" data-tracer="0" style="grid-template-columns:28px 1fr">
+      <div class="legend-dot-gradient"></div>
+      <div class="legend-text">
         <div class="legend-label">BGS</div>
-        <div class="legend-range">z = 0.01–0.6</div>
+        <div class="legend-name">Bright Galaxy Survey</div>
+        <div class="legend-sub">z 0.01–0.6 · blue=star-forming, red=passive</div>
       </div>
     </div>
+
     <div class="legend-item" data-tracer="1">
-      <div class="legend-dot" style="background:#CC2200"></div>
-      <div>
+      <div class="legend-dot" style="color:#CC2200;background:#CC2200"></div>
+      <div class="legend-text">
         <div class="legend-label">LRG</div>
-        <div class="legend-range">z = 0.4–1.1</div>
+        <div class="legend-name">Luminous Red Galaxies</div>
+        <div class="legend-sub">z 0.4–1.1 · massive ellipticals</div>
       </div>
     </div>
+
     <div class="legend-item" data-tracer="2">
-      <div class="legend-dot" style="background:#00CED1"></div>
-      <div>
+      <div class="legend-dot" style="color:#00CED1;background:#00CED1"></div>
+      <div class="legend-text">
         <div class="legend-label">ELG</div>
-        <div class="legend-range">z = 0.8–1.6</div>
+        <div class="legend-name">Emission Line Galaxies</div>
+        <div class="legend-sub">z 0.8–1.6 · star-forming</div>
       </div>
     </div>
+
     <div class="legend-item" data-tracer="3">
-      <div class="legend-dot" style="background:#8888FF"></div>
-      <div>
+      <div class="legend-dot" style="color:#8888FF;background:#8888FF"></div>
+      <div class="legend-text">
         <div class="legend-label">QSO</div>
-        <div class="legend-range">z = 0.8–2.1</div>
+        <div class="legend-name">Quasars</div>
+        <div class="legend-sub">z 0.8–2.1 · active galactic nuclei</div>
+      </div>
+    </div>
+
+    <div class="legend-item" data-kind="1" id="random-toggle">
+      <div class="legend-dot" style="color:#666688;background:#666688"></div>
+      <div class="legend-text">
+        <div class="legend-label">Randoms</div>
+        <div class="legend-name">Density field</div>
+        <div class="legend-sub">unclustered control sample · dimmed</div>
       </div>
     </div>
   </div>
 
+  <!-- Controls bar -->
   <div id="controls">
     <div class="control-group">
-      <span class="control-label">Point Size</span>
-      <input type="range" id="size-slider" min="0.5" max="5" step="0.1" value="1.5" />
+      <div class="control-header">
+        <span class="control-label">Point Size</span>
+        <span class="control-value" id="size-value">1.5</span>
+      </div>
+      <input type="range" id="size-slider" min="0.5" max="5" step="0.1" value="1.5"
+             oninput="document.getElementById('size-value').textContent=(+this.value).toFixed(1)" />
     </div>
+
+    <div class="divider"></div>
+
     <div class="control-group">
-      <span class="control-label">Brightness</span>
-      <input type="range" id="opacity-slider" min="0.1" max="1" step="0.05" value="0.7" />
+      <div class="control-header">
+        <span class="control-label">Brightness</span>
+        <span class="control-value" id="opacity-value">0.70</span>
+      </div>
+      <input type="range" id="opacity-slider" min="0.05" max="1" step="0.05" value="0.7"
+             oninput="document.getElementById('opacity-value').textContent=(+this.value).toFixed(2)" />
     </div>
-    <div class="control-group">
-      <span class="control-label">Z Cutoff</span>
+
+    <div class="divider"></div>
+
+    <div class="control-group" style="min-width:160px">
+      <div class="control-header">
+        <span class="control-label">Redshift Cutoff</span>
+        <span class="control-value" id="z-label">all</span>
+      </div>
       <input type="range" id="z-slider" min="0" max="2.1" step="0.01" value="2.1" />
     </div>
   </div>
 
+  <!-- FPS / count overlay -->
   <div id="stats"></div>
+
+  <!-- Interaction hint -->
+  <div id="hint">
+    Drag to rotate · Scroll to zoom<br>
+    Click a tracer to show/hide it
+  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

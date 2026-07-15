@@ -1,6 +1,8 @@
 {
-  "version": 3,
-  "n_points": 1397612,
+  "version": 4,
+  "n_points": 1622612,
+  "n_galaxies": 1397612,
+  "n_randoms": 225000,
   "tracers": {
     "0": {
       "name": "BGS",
@@ -55,10 +57,10 @@
     "model": "FlatLambdaCDM"
   },
   "data_release": "DESI DR1 guadalupe/v1.0",
-  "sampling": "none \u2014 full catalog",
+  "sampling": "galaxies: full catalog; randoms: subsampled density layer",
   "color_encoding": {
     "field": "color_byte (byte offset 13 per record)",
-    "description": "g-r colour from dereddened DESI fluxes (BGS only; 128=neutral for other tracers)",
+    "description": "g-r colour from dereddened DESI fluxes (BGS only; 128=neutral for other tracers and randoms)",
     "gr_min": -0.5,
     "gr_max": 2.5,
     "byte_0": "blue/star-forming (g-r=-0.5)",

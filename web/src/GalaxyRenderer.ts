@@ -44,6 +44,7 @@ const VERTEX_SHADER = /* glsl */ `
   attribute float aTracer;     // tracer index 0–3
   attribute float aRedshift;   // encoded redshift (0–2.1)
   attribute float aColorByte;  // g-r colour byte 0–255 (BGS only; 128=neutral)
+  attribute float aKind;       // 0 = galaxy, 1 = random (density field)
 
   // Uniforms updated cheaply on slider interaction (no buffer upload)
   uniform vec3  uColors[4];
@@ -53,6 +54,8 @@ const VERTEX_SHADER = /* glsl */ `
   uniform float uOpacity;
   uniform float uZCutoff;
   uniform bool  uTracerVisible[4];
+  uniform bool  uShowRandoms;  // toggle the random density layer
+  uniform float uRandomDim;    // opacity multiplier for randoms
   uniform float uCanvasHeight;
   uniform float uMaxPointSize;
 
@@ -61,9 +64,11 @@ const VERTEX_SHADER = /* glsl */ `
 
   void main() {
     int tid = int(aTracer + 0.5);
+    bool isRandom = aKind > 0.5;
 
     // Visibility: hidden tracer or above z cutoff → size 0, fully transparent
     bool visible = uTracerVisible[tid] && (aRedshift <= uZCutoff);
+    if (isRandom) visible = visible && uShowRandoms;
 
     // BGS: interpolate blue↔red ramp from per-galaxy g-r colour byte
     // Other tracers: use uniform palette colour
@@ -73,7 +78,8 @@ const VERTEX_SHADER = /* glsl */ `
     } else {
       vColor = uColors[tid];
     }
-    vAlpha = visible ? uOpacity : 0.0;
+    float alpha = uOpacity * (isRandom ? uRandomDim : 1.0);
+    vAlpha = visible ? alpha : 0.0;
 
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
 
@@ -148,11 +154,10 @@ export class GalaxyRenderer {
 
   private buildGeometry(): void {
     if (!this.data) return;
-    const { x, y, z, tracer, colorByte, redshift, nPoints } = this.data;
+    const { x, y, z, tracer, colorByte, redshift, kind, nPoints } = this.data;
 
     // position MUST be interleaved xyz for Three.js; single copy, unavoidable.
-    // tracer/redshift/colorByte are already SoA Float32/Uint8 views — wrap
-    // them directly, no re-copy.
+    // tracer/redshift/colorByte/kind are already SoA views — wrap directly.
     const positions = new Float32Array(nPoints * 3);
     for (let i = 0; i < nPoints; i++) {
       positions[i * 3]     = x[i];
@@ -171,6 +176,7 @@ export class GalaxyRenderer {
     geo.setAttribute("aTracer",    new THREE.BufferAttribute(tracer, 1));
     geo.setAttribute("aRedshift",  new THREE.BufferAttribute(redshift, 1));
     geo.setAttribute("aColorByte", new THREE.BufferAttribute(colorByte, 1));
+    geo.setAttribute("aKind",      new THREE.BufferAttribute(kind, 1));
 
     const mat = new THREE.ShaderMaterial({
       vertexShader: VERTEX_SHADER,
@@ -184,6 +190,8 @@ export class GalaxyRenderer {
         uOpacity:       { value: 0.7 },
         uZCutoff:       { value: 2.1 },
         uTracerVisible: { value: [true, true, true, true] },
+        uShowRandoms:   { value: true },
+        uRandomDim:     { value: 0.25 },
         uCanvasHeight:  { value: window.innerHeight * Math.min(window.devicePixelRatio, 2) },
         uMaxPointSize:  { value: 64.0 },
       },
@@ -196,6 +204,12 @@ export class GalaxyRenderer {
     this.material = mat;
     this.points = new THREE.Points(geo, mat);
     this.scene.add(this.points);
+  }
+
+  setShowRandoms(show: boolean): void {
+    if (this.material) {
+      (this.material.uniforms["uShowRandoms"] as THREE.IUniform<boolean>).value = show;
+    }
   }
 
   /**
