@@ -23,6 +23,16 @@ TRACER_COLORS = {
     3: (0.533, 0.533, 1.0, 1.0),  # QSO — blue-violet
 }
 
+# Emission strength per tracer — tuned for Standard colour management.
+# Dense tracers (BGS, ELG) need lower strength to avoid saturation in
+# overlapping regions; sparse tracers (QSO) need more to stay visible.
+TRACER_EMISSION_STRENGTH = {
+    0: 1.0,   # BGS — densest, keep low to preserve colour in dense regions
+    1: 1.2,   # LRG — moderate density
+    2: 1.0,   # ELG — many points, moderate
+    3: 2.0,   # QSO — sparsest, boost visibility
+}
+
 TRACER_NAMES = {0: "BGS", 1: "LRG", 2: "ELG", 3: "QSO"}
 
 
@@ -145,8 +155,9 @@ def create_galaxy_mesh(
 
 def create_tracer_material(tracer_id: int) -> bpy.types.Material:
     """Single-colour emission material for one tracer type."""
-    color = TRACER_COLORS[tracer_id]
-    name  = TRACER_NAMES[tracer_id]
+    color    = TRACER_COLORS[tracer_id]
+    strength = TRACER_EMISSION_STRENGTH[tracer_id]
+    name     = TRACER_NAMES[tracer_id]
     mat   = bpy.data.materials.new(f"Mat_{name}")
     mat.use_nodes = True
     tree  = mat.node_tree
@@ -154,7 +165,7 @@ def create_tracer_material(tracer_id: int) -> bpy.types.Material:
     out = tree.nodes.new("ShaderNodeOutputMaterial")
     em  = tree.nodes.new("ShaderNodeEmission")
     em.inputs["Color"].default_value    = color
-    em.inputs["Strength"].default_value = 6.0
+    em.inputs["Strength"].default_value = strength
     tree.links.new(em.outputs["Emission"], out.inputs["Surface"])
     return mat
 
@@ -246,7 +257,7 @@ def add_instance_on_points_geonodes(
         # Avoids the Blender 5.x bug where ObjectInfo leaks the template mesh.
         ico_node = nodes.new("GeometryNodeMeshIcoSphere")
         ico_node.inputs["Radius"].default_value = ico_obj["radius"]
-        ico_node.inputs["Subdivisions"].default_value = 1
+        ico_node.inputs["Subdivisions"].default_value = 0
         ico_node.location = (-100, y - 120)
 
         # Set material on the realized geometry via a SetMaterial node
@@ -268,7 +279,7 @@ def add_instance_on_points_geonodes(
         links.new(ri.outputs["Geometry"],    join.inputs["Geometry"])
 
 
-def add_background_stars(n: int = 3000, spread: float = 8.0, ico_radius: float = 0.002):
+def add_background_stars(n: int = 2000, spread: float = 12.0, ico_radius: float = 0.0005):
     """Faint background star field using same InstanceOnPoints approach."""
     np.random.seed(42)
     mesh = bpy.data.meshes.new("Stars")
@@ -298,7 +309,7 @@ def add_background_stars(n: int = 3000, spread: float = 8.0, ico_radius: float =
     out = mat.node_tree.nodes.new("ShaderNodeOutputMaterial")
     em  = mat.node_tree.nodes.new("ShaderNodeEmission")
     em.inputs["Color"].default_value    = (0.7, 0.8, 1.0, 1.0)
-    em.inputs["Strength"].default_value = 0.8
+    em.inputs["Strength"].default_value = 0.3
     mat.node_tree.links.new(em.outputs["Emission"], out.inputs["Surface"])
 
     # No template object needed — geo-nodes uses GeometryNodeMeshIcoSphere inline.
@@ -317,7 +328,7 @@ def add_background_stars(n: int = 3000, spread: float = 8.0, ico_radius: float =
     m2p.mode = "VERTICES"
     ico_n = ng.nodes.new("GeometryNodeMeshIcoSphere")
     ico_n.inputs["Radius"].default_value = ico_radius
-    ico_n.inputs["Subdivisions"].default_value = 1
+    ico_n.inputs["Subdivisions"].default_value = 0
     sm   = ng.nodes.new("GeometryNodeSetMaterial")
     sm.inputs["Material"].default_value = mat
     iop  = ng.nodes.new("GeometryNodeInstanceOnPoints")
@@ -334,7 +345,7 @@ def build_scene(
     parquet_path: Path,
     max_points: int = 1_400_000,
     scale: float = 0.001,
-    galaxy_radius: float = 0.008,
+    galaxy_radius: float = 0.001,
 ) -> bpy.types.Object:
     """Full scene construction — data load, mesh, per-tracer instancing, stars."""
     np.random.seed(42)

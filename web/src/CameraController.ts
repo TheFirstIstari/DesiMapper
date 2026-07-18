@@ -3,11 +3,21 @@
  *
  * Implements touch-friendly orbit, zoom, and pan without external dependencies.
  * Designed for exploring a galaxy point cloud: smooth inertia, min/max distance clamps.
+ *
+ * Fix notes:
+ *  - Damping is now frame-rate-independent: uses elapsed ms so inertia feels
+ *    identical at 30fps, 60fps, and 120fps.
+ *  - dispose() now removes all event listeners including touch handlers.
  */
 
 import * as THREE from "three";
 
 const HALF_PI = Math.PI / 2 - 0.001;
+
+// Damping coefficient per millisecond. Tuned so at 16.67ms (60fps) the
+// per-frame factor ≈ 0.88, matching the original feel.
+// Math: 0.88^(1/16.67) ≈ 0.9924  →  factor = Math.pow(0.9924, dt)
+const DAMPING_PER_MS = 0.9924;
 
 export class CameraController {
   private camera: THREE.PerspectiveCamera;
@@ -25,10 +35,12 @@ export class CameraController {
   private lastX = 0;
   private lastY = 0;
 
-  // Inertia
+  // Inertia (velocity)
   private dTheta = 0;
   private dPhi = 0;
-  private damping = 0.88;
+
+  // Frame timing for frame-rate-independent damping
+  private lastTickTime = performance.now();
 
   // Zoom
   private minRadius = 50;
@@ -43,13 +55,10 @@ export class CameraController {
 
   private bindEvents(): void {
     const el = this.domElement;
-
     el.addEventListener("mousedown", this.onMouseDown);
     window.addEventListener("mousemove", this.onMouseMove);
     window.addEventListener("mouseup", this.onMouseUp);
     el.addEventListener("wheel", this.onWheel, { passive: false });
-
-    // Touch
     el.addEventListener("touchstart", this.onTouchStart, { passive: true });
     el.addEventListener("touchmove", this.onTouchMove, { passive: false });
     el.addEventListener("touchend", this.onTouchEnd, { passive: true });
@@ -67,9 +76,8 @@ export class CameraController {
     const dy = e.clientY - this.lastY;
     this.lastX = e.clientX;
     this.lastY = e.clientY;
-
     this.dTheta = -dx * 0.004;
-    this.dPhi = -dy * 0.004;
+    this.dPhi   = -dy * 0.004;
     this.theta += this.dTheta;
     this.phi = Math.max(-HALF_PI, Math.min(HALF_PI, this.phi + this.dPhi));
   };
@@ -128,22 +136,27 @@ export class CameraController {
     const x = this.radius * Math.cos(this.phi) * Math.sin(this.theta);
     const y = this.radius * Math.sin(this.phi);
     const z = this.radius * Math.cos(this.phi) * Math.cos(this.theta);
-
     this.camera.position.set(
       this.target.x + x,
       this.target.y + y,
-      this.target.z + z
+      this.target.z + z,
     );
     this.camera.lookAt(this.target);
   }
 
   tick(): void {
+    const now = performance.now();
+    const dt = Math.min(now - this.lastTickTime, 100); // cap at 100ms (tab hidden etc.)
+    this.lastTickTime = now;
+
     if (!this.isDragging) {
+      // Frame-rate-independent damping: decay velocity by DAMPING_PER_MS^dt
+      const decay = Math.pow(DAMPING_PER_MS, dt);
       this.theta += this.dTheta;
-      this.phi += this.dPhi;
-      this.phi = Math.max(-HALF_PI, Math.min(HALF_PI, this.phi));
-      this.dTheta *= this.damping;
-      this.dPhi *= this.damping;
+      this.phi   += this.dPhi;
+      this.phi    = Math.max(-HALF_PI, Math.min(HALF_PI, this.phi));
+      this.dTheta *= decay;
+      this.dPhi   *= decay;
     }
     this.updateCamera();
   }
@@ -154,5 +167,9 @@ export class CameraController {
     window.removeEventListener("mousemove", this.onMouseMove);
     window.removeEventListener("mouseup", this.onMouseUp);
     el.removeEventListener("wheel", this.onWheel);
+    // Touch listeners (previously missing from dispose)
+    el.removeEventListener("touchstart", this.onTouchStart);
+    el.removeEventListener("touchmove", this.onTouchMove);
+    el.removeEventListener("touchend", this.onTouchEnd);
   }
 }

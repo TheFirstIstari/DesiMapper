@@ -5,7 +5,7 @@
 DesiMapper is a high-performance data pipeline and visualization toolkit for the **DESI (Dark Energy Spectroscopic Instrument) Data Release 1** galaxy survey. It extracts galaxy position data (RA, Dec, redshift) from the DESI LSS catalogs, converts them to 3D Cartesian coordinates, and produces:
 
 1. **A cinematic 3D animation** — a fly-through of the DESI survey volume, exportable as a YouTube-ready video
-2. **A real-time interactive web visualizer** — a publicly hosted Three.js/WebGL viewer hosted on a Fedora MiniPC, rendering a reduced model of the full dataset
+2. **A real-time interactive web visualizer** — a publicly hosted Three.js/WebGL viewer deployed to Render as a static site, rendering a reduced model of the full dataset
 
 ---
 
@@ -61,7 +61,7 @@ DesiMapper/
 │   ├── package.json
 │   └── vite.config.ts
 ├── scripts/
-│   ├── deploy.sh           # Deploy to Fedora MiniPC
+│   ├── batch_render.sh     # Batched Blender render
 │   └── run_pipeline.sh     # Full pipeline runner
 ├── data/
 │   ├── raw/                # Downloaded FITS files (gitignored)
@@ -198,19 +198,9 @@ Target: ≤ 500k points for web (downsampled from ~2M), file size ≤ 32 MB.
 - Archive storage for raw FITS files and processed Parquet data
 - Run data pipeline for heavy downloads
 
-### Fedora MiniPC (root@100.82.166.71, AMD 7940HS)
-- **Static web server** — serves the Vite-built Three.js app
-- Connected to the internet only via Tailscale mesh (no public port-forward on local ISP)
-- Nginx serves files locally on port 80
-
-### Azure VM (public internet access)
-- **Public-facing reverse proxy** — has a static public IP
-- Nginx proxies inbound HTTP → Fedora MiniPC via Tailscale IP (100.82.166.71)
-- This bridges the ISP port-forward limitation
-
-```
-Browser → Azure VM (public IP :80) → [Tailscale] → Fedora MiniPC (100.82.166.71:80)
-```
+### Render (web viewer host)
+- **Static site host** — serves the Vite-built Three.js app at `desi.tweak.wiki` (see `render.yaml`)
+- Replaced the previous self-hosted Fedora MiniPC + Azure reverse-proxy setup
 
 ---
 
@@ -241,7 +231,7 @@ Browser → Azure VM (public IP :80) → [Tailscale] → Fedora MiniPC (100.82.1
 - [ ] Point cloud renderer with colour-by-tracer
 - [ ] Orbit + fly camera controls
 - [ ] Redshift slider UI
-- [ ] Nginx deploy to Fedora MiniPC
+- [ ] Static deploy to Render (render.yaml)
 
 ### Phase 3 — Animation (Days 4–7)
 - [ ] Blender scene setup (headless)

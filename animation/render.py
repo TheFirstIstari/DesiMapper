@@ -3,6 +3,7 @@ render.py — Orchestrates the DesiMapper Blender animation render.
 
 Defaults: 7680×4320 (8K UHD) @ 60fps on macOS with Metal GPU acceleration.
 The M-series / AMD GPU in the MacBook is used via Cycles Metal backend.
+EEVEE is available as a faster alternative (10-50x) for emission-only scenes.
 
 Usage (headless):
     blender --background --python animation/render.py -- \
@@ -13,14 +14,18 @@ Usage (headless):
     blender --background --python animation/render.py -- \
         --resolution 1920x1080 --samples 32 --max-points 200000
 
-    # Full 8K production render:
+    # Fast Mac render with EEVEE (recommended for iteration):
     blender --background --python animation/render.py -- \
-        --resolution 7680x4320 --samples 128 --max-points 2000000
+        --engine BLENDER_EEVEE_NEXT --samples 32 --resolution 1920x1080
+
+    # Full 8K production render (Cycles):
+    blender --background --python animation/render.py -- \
+        --resolution 7680x4320 --samples 64 --max-points 2000000
 
 The -- separates Blender args from script args.
 
 Storage estimate:
-    8K PNG frame = ~50 MB → 13,500 frames (7.5 min @ 60fps) = ~675 GB
+    8K PNG frame = ~15 MB → 14,400 frames (4 min @ 60fps) = ~210 GB
     Ensure renders/ has sufficient space or use --start-frame/--end-frame
     to render in batches.
 """
@@ -51,8 +56,8 @@ def parse_args():
         help="Output directory for PNG frames",
     )
     parser.add_argument(
-        "--samples", type=int, default=128,
-        help="Cycles render samples per frame (default: 128 — adaptive sampling disabled)",
+        "--samples", type=int, default=64,
+        help="Render samples per frame (default: 64 — sufficient for emission-only scenes)",
     )
     parser.add_argument(
         "--resolution", default="7680x4320",
@@ -82,6 +87,12 @@ def parse_args():
     parser.add_argument(
         "--no-denoising", action="store_true",
         help="Disable OptiX/Metal denoising (use if causing artefacts)",
+    )
+    parser.add_argument(
+        "--engine", default="CYCLES",
+        choices=["CYCLES", "BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"],
+        help="Render engine (default: CYCLES). EEVEE is much faster for "
+             "emission-only scenes with identical visual results.",
     )
     return parser.parse_args(argv)
 
@@ -226,7 +237,7 @@ def main():
     print(f"  Output     : {output_dir}/")
     print("=" * 60)
 
-    build_scene(parquet_path, max_points=args.max_points, galaxy_radius=0.005)
+    build_scene(parquet_path, max_points=args.max_points, galaxy_radius=0.001)
 
     cam = create_camera()
     # Update camera path for 60fps (more keyframes for smoothness)
@@ -234,7 +245,20 @@ def main():
 
     # ─── Render settings ────────────────────────────────────────────────────
     scene = bpy.context.scene
-    scene.render.engine = "CYCLES"
+    engine = args.engine
+    # Blender 4.x uses "BLENDER_EEVEE" (legacy), 5.x uses "BLENDER_EEVEE_NEXT".
+    # Auto-resolve: if user picks one and it fails, try the other.
+    if engine in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
+        try:
+            scene.render.engine = engine
+        except Exception:
+            fallback = ("BLENDER_EEVEE" if engine == "BLENDER_EEVEE_NEXT"
+                        else "BLENDER_EEVEE_NEXT")
+            scene.render.engine = fallback
+            engine = fallback
+    else:
+        scene.render.engine = engine
+    print(f"  Engine   : {engine}")
     scene.render.fps = fps
     scene.render.fps_base = 1
 
@@ -260,34 +284,45 @@ def main():
     img_fmt.color_depth = "8"
     img_fmt.compression = 5
 
-    # Colour management — tone-mapped for space visualization.
-    # Blender 5.0+ uses AgX instead of Filmic. We prefer AgX when available
-    # (Blender 4.2+), then fall back to Filmic (4.x), then Raw.
-    # "Medium Contrast" look exists in Filmic; AgX uses different look names.
+    # Colour management — use Standard (no tone-mapping) for data visualization.
+    # AgX/Filmic are designed for photographic lighting; they compress high
+    # emission values toward white, destroying the tracer colour hues.
+    # Standard + controlled emission strength preserves the distinct
+    # orange/red/teal/violet palette even in dense overlapping regions.
     vs = scene.view_settings
     try:
-        vs.view_transform = "AgX"
-        # AgX look names differ from Filmic — "Medium Contrast" doesn't exist.
-        # "None" is neutral; use it rather than risking an invalid look name.
+        vs.view_transform = "Standard"
         vs.look = "None"
-        print("  Color management: AgX / None")
+        print("  Color management: Standard / None")
     except TypeError:
         try:
-            vs.view_transform = "Filmic"
-            vs.look = "Medium Contrast"
-            print("  Color management: Filmic / Medium Contrast")
+            vs.view_transform = "Raw"
+            vs.look = "None"
+            print("  Color management: Raw / None")
         except TypeError:
             pass  # leave at scene defaults
-    vs.exposure = -0.5   # bring down to preserve tracer color hues
+    vs.exposure = 0.5   # slight boost to brighten faint outer shells
     vs.gamma = 1.0
 
-    # GPU setup
-    if args.device == "auto":
-        configure_gpu(scene)
+    # GPU setup + render quality (engine-dependent)
+    if engine == "CYCLES":
+        if args.device == "auto":
+            configure_gpu(scene)
+        else:
+            scene.cycles.device = args.device
+        configure_render_quality(scene, args.samples, not args.no_denoising)
     else:
-        scene.cycles.device = args.device
-
-    configure_render_quality(scene, args.samples, not args.no_denoising)
+        # EEVEE — configure for best quality emission rendering.
+        # EEVEE renders emission-only scenes identically to Cycles but
+        # 10-50x faster since it rasterises instead of ray-tracing.
+        eevee = scene.eevee
+        eevee.taa_render_samples = args.samples
+        # Disable volumetrics, SSR, etc. — pure emission needs none of these.
+        if hasattr(eevee, "use_ssr"):
+            eevee.use_ssr = False
+        if hasattr(eevee, "use_bloom"):
+            eevee.use_bloom = False
+        print(f"  EEVEE samples: {args.samples}")
 
     scene.frame_start = args.start_frame
     scene.frame_end = args.end_frame or int(TOTAL_SECONDS * fps)

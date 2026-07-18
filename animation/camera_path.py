@@ -38,50 +38,59 @@ def frame(seconds: float, fps: int = DEFAULT_FPS) -> int:
 # ELG shell (z~1.2): r ~ 3.0 BU
 # QSO shell (z~1.5): r ~ 3.5 BU
 #
-# Total duration: ~6.5 minutes at 60fps
+# DESI survey geometry: The cone opens primarily toward -Y (Dec),
+# with data spanning X=(-6.9,6.6), Y=(-6.7,0.1), Z=(-1.4,6.3).
+# Centre of mass ≈ (-0.7, -1.6, 0.8). The camera must stay within
+# the cone's opening (negative Y hemisphere) to see the full volume.
 #
+# Focus point: Slightly offset from origin toward the data centre of mass.
+#
+# Total duration: ~4 minutes at 60fps
+#
+
+# Focal point — offset from origin toward the survey's centre of mass
+FOCUS = (-0.5, -1.0, 0.5)
 
 # (seconds, location, look_at, lens_mm)
 KEYFRAME_DEFS: List[Tuple[float, Tuple, Tuple, float]] = [
-    # Segment 1: Title hold — camera very close, looking at origin
-    (0.0,   (0.0,  0.0,   0.1),   (0, 0, 0), 50),
-    (10.0,  (0.0,  0.0,   0.1),   (0, 0, 0), 50),
+    # Segment 1: Opening — wide shot from above/outside the cone
+    (0.0,   (2.0,  2.0,   8.0),   FOCUS, 22),
+    (5.0,   (2.0,  2.0,   8.0),   FOCUS, 22),
 
-    # Segment 2: Zoom out from "Earth" to survey volume
-    (10.0,  (0.0,  0.05,  0.2),   (0, 0, 0), 50),
-    (30.0,  (1.5,  0.8,   3.0),   (0, 0, 0), 35),
+    # Segment 2: Slow arc — reveal the full cone shape
+    (5.0,   (2.0,  2.0,   8.0),   FOCUS, 22),
+    (25.0,  (-3.0, -3.0,  7.0),   FOCUS, 20),
 
-    # Segment 3: Orbit BGS shell (nearby galaxies, warm orange)
-    (30.0,  (2.5,  0.5,   2.0),   (0, 0, 0), 28),
-    (60.0,  (0.5,  0.8,   3.0),   (0, 0, 0), 28),
-    (90.0,  (-2.5, 0.5,   2.0),   (0, 0, 0), 28),
+    # Segment 3: Sweep alongside the QSO shell (blue-violet, outermost)
+    (25.0,  (-3.0, -3.0,  7.0),   FOCUS, 20),
+    (50.0,  (4.0,  -5.0,  4.0),   FOCUS, 22),
 
-    # Segment 4: Push out through LRG shell (deep red)
-    (90.0,  (-2.5, 0.5,   2.0),   (0, 0, 0), 28),
-    (120.0, (-1.0, 0.5,   4.5),   (0, 0, 0), 24),
-    (150.0, (3.0,  1.0,   4.0),   (0, 0, 0), 24),
+    # Segment 4: Dive into the ELG shell (teal, z~1.2)
+    (50.0,  (4.0,  -5.0,  4.0),   FOCUS, 22),
+    (80.0,  (-2.0, -4.0,  3.5),   FOCUS, 24),
 
-    # Segment 5: ELG shell revealed (teal, z~1.2)
-    (150.0, (3.0,  1.0,   4.0),   (0, 0, 0), 24),
-    (195.0, (0.5,  3.0,   5.5),   (0, 0, 0), 20),
-    (225.0, (-4.0, 1.5,   4.0),   (0, 0, 0), 20),
+    # Segment 5: Through the LRG shell (deep red, z~0.7)
+    (80.0,  (-2.0, -4.0,  3.5),   FOCUS, 24),
+    (110.0, (1.5,  -2.5,  2.5),   FOCUS, 28),
 
-    # Segment 6: QSO shell — wide angle, full depth of universe
-    (225.0, (-4.0, 1.5,   4.0),   (0, 0, 0), 20),
-    (255.0, (0.0,  5.0,   6.0),   (0, 0, 0), 18),
+    # Segment 6: Orbit within BGS (orange, nearest — cosmic web detail)
+    # Stay far enough out to see structure, not a wall of points.
+    (110.0, (1.5,  -2.5,  2.5),   FOCUS, 28),
+    (135.0, (-1.5, -2.0,  2.5),   FOCUS, 28),
+    (160.0, (1.5,  -2.5,  3.0),   FOCUS, 26),
 
-    # Segment 7: 360° grand rotation of full survey volume
-    (255.0, (5.0,  3.0,   4.0),   (0, 0, 0), 18),
-    (315.0, (-5.0, 3.0,   4.0),   (0, 0, 0), 18),
-    (345.0, (0.0,  3.0,  -6.0),   (0, 0, 0), 18),
-    (375.0, (5.0,  3.0,   4.0),   (0, 0, 0), 18),
+    # Segment 7: Pull back out — grand reveal of full volume
+    (160.0, (1.0,  -2.0,  2.0),   FOCUS, 24),
+    (185.0, (-4.0, -5.0,  6.0),   FOCUS, 20),
+    (210.0, (4.0,  -3.0,  7.0),   FOCUS, 20),
 
-    # Segment 8: Outro — slow pull back to black
-    (375.0, (5.0,  3.0,   4.0),   (0, 0, 0), 18),
-    (390.0, (0.0,  0.0,   0.001), (0, 0, 0), 50),
+    # Segment 8: Final sweep + fade — drift upward and away
+    (210.0, (4.0,  -3.0,  7.0),   FOCUS, 20),
+    (235.0, (0.0,  1.0,   9.0),   FOCUS, 18),
+    (240.0, (0.0,  2.0,  10.0),   FOCUS, 18),
 ]
 
-TOTAL_SECONDS = 390.0
+TOTAL_SECONDS = 240.0
 
 
 def build_keyframes(fps: int) -> List[CameraKeyframe]:
